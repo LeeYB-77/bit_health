@@ -77,5 +77,5 @@ def startup_event():
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to BIT Health API"}
+    return {"message": "Welcome to BIT Wellness Center API"}
 

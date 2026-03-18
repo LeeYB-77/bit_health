@@ -52,10 +52,10 @@ function LoginForm() {
 
       <div className="flex flex-col items-center mb-8 relative z-10">
         <div className="bg-white p-3 rounded-2xl shadow-lg mb-6">
-          <Image src="/logo.svg" alt="BIT Health" width={140} height={40} className="w-auto h-10" />
+          <Image src="/logo.svg" alt="BIT Wellness Center" width={140} height={40} className="w-auto h-10" />
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">BIT Health</h1>
-        <p className="text-blue-600 text-sm mt-1 opacity-80">임직원 건강 관리 시스템</p>
+        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">BIT Wellness Center</h1>
+        <p className="text-blue-600 text-sm mt-1 opacity-80">Wellness Center 이용 관리 시스템</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6 relative z-10">

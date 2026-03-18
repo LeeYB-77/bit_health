@@ -58,7 +58,7 @@ export default function AdminQRPage() {
                     {/* Unified QR Card */}
                     <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-10 flex flex-col items-center text-center max-w-md w-full">
                         <div className="mb-6 flex items-center gap-2">
-                            <h2 className="text-2xl font-bold text-gray-900">BIT Health 입장</h2>
+                            <h2 className="text-2xl font-bold text-gray-900">BIT Wellness Center 입장</h2>
                         </div>
 
                         <p className="text-gray-500 mb-8 text-sm">스캔하여 헬스장/스크린골프 입실 체크</p>

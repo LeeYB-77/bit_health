@@ -79,7 +79,7 @@ export default function AdminDashboard() {
                     <div className="flex items-center gap-2">
                         <Activity className="text-blue-600" />
                         <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">
-                            BIT Health Admin
+                            BIT Wellness Center Admin
                         </span>
                     </div>
                     <div className="flex items-center gap-4">

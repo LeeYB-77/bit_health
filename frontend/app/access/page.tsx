@@ -107,7 +107,7 @@ export default function AccessPage() {
             {/* Header */}
             <header className="bg-white p-4 shadow-sm flex items-center justify-center relative">
                 <div className="flex items-center gap-2">
-                    <Image src="/logo.svg" alt="BIT Health" width={120} height={40} />
+                    <Image src="/logo.svg" alt="BIT Wellness Center" width={120} height={40} />
                 </div>
             </header>
 
@@ -248,7 +248,7 @@ export default function AccessPage() {
                 )}
             </main>
             <footer className="p-6 text-center text-xs text-gray-400">
-                © 2026 BIT Health. All rights reserved.
+                © 2026 BIT Wellness Center. All rights reserved.
             </footer>
         </div>
     );

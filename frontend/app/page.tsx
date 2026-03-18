@@ -77,7 +77,7 @@ export default function Home() {
       <header className="bg-white sticky top-0 z-30 border-b border-gray-100 shadow-sm/50 backdrop-blur-md bg-white/80">
         <div className="max-w-lg mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Image src="/logo.svg" alt="BIT Health" width={100} height={28} className="h-7 w-auto" />
+            <Image src="/logo.svg" alt="BIT Wellness Center" width={100} height={28} className="h-7 w-auto" />
           </div>
           <button
             onClick={handleLogout}
