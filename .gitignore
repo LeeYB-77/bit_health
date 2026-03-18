@@ -1,0 +1,14 @@
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+.env
+.env.*
+.next/
+dist/
+build/
+.pytest_cache/
+coverage/
+.vs/
+.vscode/
+*.log

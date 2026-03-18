@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: bit_health_db
+    environment:
+      POSTGRES_USER: bit_health_user
+      POSTGRES_PASSWORD: bit_health_password
+      POSTGRES_DB: bit_health_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    restart: always
+
+  backend:
+    build: ./backend
+    container_name: bit_health_backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8002:8000"
+    environment:
+      DATABASE_URL: postgresql://bit_health_user:bit_health_password@db:5432/bit_health_db
+    depends_on:
+      - db
+    restart: always
+
+  frontend:
+    build: ./frontend
+    container_name: bit_health_frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3002:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8002
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  postgres_data:
