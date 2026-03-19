@@ -5,6 +5,7 @@ import openpyxl
 import io
 from .. import schemas, crud, auth, models
 from datetime import datetime, timedelta
+from pydantic import BaseModel
 
 router = APIRouter(
     prefix="/api/users",
@@ -115,7 +116,29 @@ def delete_user(
     if not success:
         raise HTTPException(status_code=404, detail="User not found")
     return None
-    return None
+
+class RoleUpdate(BaseModel):
+    role: str
+
+@router.put("/{user_id}/role", response_model=schemas.User)
+def update_user_role(
+    user_id: int, 
+    role_update: RoleUpdate,
+    db: Session = Depends(auth.get_db), 
+    current_user: models.User = Depends(auth.get_current_active_admin)
+):
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="자기 자신의 권한은 변경할 수 없습니다.")
+        
+    if role_update.role not in ["user", "admin"]:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.role = role_update.role
+    db.commit()
+    db.refresh(user)
+    return user
 
 @router.get("/me/dashboard")
 def get_user_dashboard_stats(

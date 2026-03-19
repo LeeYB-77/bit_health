@@ -7,6 +7,21 @@ def get_user(db: Session, user_id: int):
 def get_user_by_name_and_birth(db: Session, name: str, birth_date: str):
     return db.query(models.User).filter(models.User.name == name, models.User.birth_date == birth_date).first()
 
+def get_user_by_sub(db: Session, sub: str):
+    return db.query(models.User).filter(models.User.sub == sub).first()
+
+def create_user_sso(db: Session, user: schemas.UserCreate):
+    db_user = models.User(
+        sub=user.sub,
+        email=user.email,
+        name=user.name,
+        role=user.role
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
 def create_user(db: Session, user: schemas.UserCreate):
     db_user = models.User(
         name=user.name,

@@ -33,7 +33,7 @@ services:
         NEXT_PUBLIC_API_URL: http://59.10.164.2:8002
     container_name: bit_health_frontend
     ports:
-      - "3002:3000"
+      - "80:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://59.10.164.2:8002
     depends_on:

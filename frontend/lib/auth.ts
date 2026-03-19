@@ -30,6 +30,23 @@ export const login = async (name: string, birthDate: string): Promise<LoginRespo
   return response.json();
 };
 
+export const ssoLogin = async (code: string, redirectUri: string): Promise<LoginResponse> => {
+  const response = await fetch(`${API_URL}/api/auth/sso-login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ code, redirect_uri: redirectUri }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'SSO Login failed');
+  }
+
+  return response.json();
+};
+
 export const logout = () => {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('access_token');

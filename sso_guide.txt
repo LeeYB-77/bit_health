@@ -1,0 +1,365 @@
+BIT SSO 연동 가이드
+
+BIT SSO는 drive.bit.kr에서 운영하는 OIDC Identity Provider입니다.
+
+*.bit.kr 서비스 간 SSO 쿠키를 통해
+
+
+
+엔드포인트
+
+용도
+
+URL
+
+OIDC Discovery
+
+https://drive.bit.kr/auth/.well-known/openid-configuration
+
+Authorization
+
+https://drive.bit.kr/auth/authorize
+
+Token
+
+https://drive.bit.kr/auth/token
+
+UserInfo
+
+https://drive.bit.kr/auth/userinfo
+
+JWKS
+
+https://drive.bit.kr/auth/jwks
+
+Health Check
+
+https://drive.bit.kr/auth/health
+
+
+
+주의: /.well-known/jwks.json이 아니라 /auth/jwks입니다.
+
+인증 플로우
+
+표준 OIDC Authorization Code Flow를 따릅니다.
+
+[사용자 브라우저]
+    │
+    ▼  1. 로그인 필요
+[내 서비스]
+    │
+    ▼  2. redirect → /auth/authorize?client_id=...&redirect_uri=...&state=...
+[BIT SSO 로그인 페이지]
+    │
+    ▼  3. 이메일 입력 → OTP 발송 → OTP 입력
+[BIT SSO]
+    │
+    ▼  4. redirect → {redirect_uri}?code=xxx&state=yyy
+[내 서비스 콜백]
+    │
+    ▼  5. POST /auth/token (code 교환)
+[내 서비스]
+    │
+    ▼  6. GET /auth/userinfo (사용자 정보 조회)
+[완료]
+
+
+SSO 쿠키가 있으면 3단계(OTP)가 자동으로 건너뛰어집니다.
+
+연동 방법
+
+1단계: redirect_uri 등록
+
+redirect_uri 도메인은 허용 목록에 있어야 합니다.
+
+bit.kr, druginfo.kr (서브도메인 포함)
+
+새 도메인이 필요하면 auth-proxy의 ALLOWED_REDIRECT_DOMAINS에 추가 요청하세요.
+
+2단계: Authorization 요청
+
+사용자를 아래 URL로 리다이렉트합니다.
+
+https://drive.bit.kr/auth/authorize
+  ?client_id={아무 값}
+  &redirect_uri=https://내서비스.bit.kr/callback
+  &response_type=code
+  &scope=openid email profile
+  &state={CSRF 방지용 랜덤 값}
+  &nonce={선택}
+
+
+파라미터
+
+필수
+
+설명
+
+client_id
+
+O
+
+OIDC 클라이언트 식별자 (현재 별도 등록 없이 아무 값 사용 가능)
+
+redirect_uri
+
+O
+
+인증 후 돌아올 콜백 URL (허용 도메인이어야 함)
+
+response_type
+
+O
+
+code 고정
+
+scope
+
+-
+
+openid email profile 권장
+
+state
+
+O
+
+CSRF 방지용. 콜백에서 검증 필수
+
+nonce
+
+-
+
+id_token replay 방지용
+
+
+
+3단계: 콜백에서 code 수신
+
+인증 성공 시 redirect_uri로 리다이렉트됩니다:
+
+https://내서비스.bit.kr/callback?code=xxx&state=yyy
+
+
+state 값이 2단계에서 보낸 것과 일치하는지 반드시 검증하세요.
+
+4단계: Token 교환
+
+POST https://drive.bit.kr/auth/token
+Content-Type: application/x-www-form-urlencoded
+
+
+&code={3단계에서 받은 code}
+&redirect_uri=https://내서비스.bit.kr/callback
+&client_id={2단계와 동일한 값}
+&client_secret={빈 문자열 가능}
+
+
+응답:
+
+{
+  "access_token": "...",
+  "id_token": "eyJhbGciOiJSUzI1NiIs...",
+  "refresh_token": "...",
+  "token_type": "Bearer",
+  "expires_in": 3600
+}
+
+
+5단계: 사용자 정보 확인
+
+방법 A: id_token 디코딩 (권장)
+
+id_token은 JWT(RS256)이며 /auth/jwks의 공개키로 검증합니다.
+
+{
+  "iss": "https://drive.bit.kr/auth",
+  "sub": "b4586dfc-c091-7006-32a4-f7700bf1cf4b",
+  "aud": "내 client_id",
+  "email": "jesuk@bit.kr",
+  "email_verified": true,
+  "name": "조제석",
+  "iat": 1740000000,
+  "exp": 1740003600
+}
+
+
+방법 B: UserInfo 엔드포인트
+
+GET https://drive.bit.kr/auth/userinfo
+Authorization: Bearer {access_token}
+
+
+응답:
+
+{
+  "sub": "b4586dfc-c091-7006-32a4-f7700bf1cf4b",
+  "email": "jesuk@bit.kr",
+  "email_verified": true,
+  "name": "조제석"
+}
+
+
+SSO 쿠키
+
+항목
+
+값
+
+쿠키명
+
+bit_sso
+
+Domain
+
+.bit.kr
+
+Max-Age
+
+14일
+
+Secure
+
+true (HTTPS only)
+
+HttpOnly
+
+true
+
+SameSite
+
+lax
+
+
+
+사용자가 BIT SSO로 한 번 로그인하면 .bit.kr 도메인 쿠키가 설정됩니다.
+
+*.bit.kr 서비스가 /auth/authorize로 리다이렉트하면
+
+
+
+외부 도메인 (예: druginfo.kr)은 SSO 쿠키 혜택을 받지 못하며,
+
+
+
+토큰 검증
+
+id_token을 서버에서 검증하려면:
+
+https://drive.bit.kr/auth/jwks에서 공개키(JWKS) 가져오기
+
+JWT 라이브러리로 RS256 서명 검증
+
+iss, aud, exp 클레임 확인
+
+Node.js 예시
+
+const jwt = require('jsonwebtoken');
+const jwksClient = require('jwks-rsa');
+
+
+  jwksUri: 'https://drive.bit.kr/auth/jwks'
+});
+
+
+  client.getSigningKey(header.kid, (err, key) => {
+    callback(null, key.getPublicKey());
+  });
+}
+
+
+  algorithms: ['RS256'],
+  issuer: 'https://drive.bit.kr/auth'
+}, (err, decoded) => {
+  // decoded.sub = 사용자 UUID
+  // decoded.email = 이메일
+});
+
+
+Python 예시
+
+import jwt
+import requests
+
+
+public_key = jwt.algorithms.RSAAlgorithm.from_jwk(jwks['keys'][0])
+
+
+    id_token,
+    public_key,
+    algorithms=['RS256'],
+    issuer='https://drive.bit.kr/auth',
+)
+# decoded['sub'] = 사용자 UUID
+# decoded['email'] = 이메일
+
+
+사용자 식별
+
+클레임
+
+설명
+
+예시
+
+sub
+
+Cognito UUID (고유 식별자)
+
+b4586dfc-c091-7006-32a4-f7700bf1cf4b
+
+email
+
+회사 이메일 (@bit.kr)
+
+jesuk@bit.kr
+
+name
+
+표시 이름 (한글)
+
+배제석
+
+
+
+sub는 변하지 않는 고유 ID입니다. 사용자 테이블의 PK로 사용하세요.
+
+email은 변경될 수 있으므로 PK로 사용하지 마세요.
+
+허용 사용자
+
+현재 @bit.kr 이메일을 가진 직원만 로그인 가능합니다.
+
+
+
+
+
+이메일 발신자
+
+인증 코드 이메일은 BIT SSO <sso@bit.kr>에서 발송됩니다.
+
+FAQ
+
+Q: client_id / client_secret을 별도 발급받아야 하나요?
+
+
+
+Q: 외부 SaaS (Claude Team, Slack 등)도 연동 가능한가요?
+
+
+
+Q: SSO 세션 만료 후에는?
+
+
+
+Q: 로그아웃은 어떻게 하나요?
+
+bit_sso 쿠키는 14일 후 자동 만료됩니다.
+
+연락처
+
+연동 중 문제가 있으면:
+
+auth-proxy 소스: docker/auth-proxy/app.py
+
+도메인 추가 요청: ALLOWED_REDIRECT_DOMAINS 수정 필요

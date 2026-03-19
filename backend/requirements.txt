@@ -9,3 +9,6 @@ python-multipart
 openpyxl
 apscheduler
 holidays
+PyJWT
+cryptography
+requests

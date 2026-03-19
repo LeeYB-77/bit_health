@@ -161,7 +161,7 @@ export default function AdminDashboard() {
                                 onClick={() => router.push('/admin/users')}
                                 className="w-full py-2 bg-indigo-50 text-indigo-600 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition-colors flex items-center justify-center gap-2"
                             >
-                                회원 관리 <ArrowRight size={14} />
+                                관리자 등록 설정 <ArrowRight size={14} />
                             </button>
                             <button
                                 onClick={() => router.push('/admin/qr')}

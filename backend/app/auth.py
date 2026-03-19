@@ -10,7 +10,7 @@ import os
 # Secret key for JWT encoding/decoding. In production, this should be an env variable.
 SECRET_KEY = os.getenv("SECRET_KEY", "bit_health_secret_key_2026")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 24 hours
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 365 # 1 year
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 

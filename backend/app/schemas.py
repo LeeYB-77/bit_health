@@ -4,7 +4,9 @@ from datetime import datetime
 
 class UserBase(BaseModel):
     name: str
-    birth_date: str
+    birth_date: Optional[str] = None
+    email: Optional[str] = None
+    sub: Optional[str] = None
     department: Optional[str] = None
     role: str = "user"
 
@@ -20,7 +22,7 @@ class User(UserBase):
 
 class LoginRequest(BaseModel):
     name: str
-    birth_date: str
+    birth_date: Optional[str] = None
 
 class Token(BaseModel):
     access_token: str

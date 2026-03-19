@@ -6,8 +6,10 @@ from datetime import datetime
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
+    sub = Column(String, unique=True, index=True, nullable=True) # SSO UUID
+    email = Column(String, nullable=True)
     name = Column(String, index=True)
-    birth_date = Column(String)  # YYYYMMDD
+    birth_date = Column(String, nullable=True)  # YYYYMMDD, nullable for SSO users
     role = Column(String, default="user") # user, admin
     department = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

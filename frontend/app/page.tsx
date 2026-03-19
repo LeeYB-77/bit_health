@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getGymStatus, GymStatus, getUserDashboard, UserDashboardStats } from '@/lib/api';
-import { Activity, MapPin, LogOut, User, ChevronRight, BarChart3, Calendar } from 'lucide-react';
+import { Activity, MapPin, LogOut, User, ChevronRight, BarChart3, Calendar, Settings } from 'lucide-react';
 import Image from 'next/image';
 
 export default function Home() {
@@ -11,6 +11,7 @@ export default function Home() {
   const [gymStatus, setGymStatus] = useState<GymStatus | null>(null);
   const [dashboardStats, setDashboardStats] = useState<UserDashboardStats>({ monthly_count: 0, has_today_reservation: false });
   const [userName, setUserName] = useState('');
+  const [userRole, setUserRole] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,6 +24,7 @@ export default function Home() {
     }
 
     setUserName(name || '회원');
+    setUserRole(localStorage.getItem('user_role') || 'user');
     fetchStatus();
   }, [router]);
 
@@ -79,12 +81,24 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <Image src="/logo.svg" alt="BIT Wellness Center" width={100} height={28} className="h-7 w-auto" />
           </div>
-          <button
-            onClick={handleLogout}
-            className="p-2 -mr-2 text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <LogOut size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            {userRole === 'admin' && (
+              <button
+                onClick={() => router.push('/admin')}
+                className="p-2 mr-2 text-gray-400 hover:text-blue-600 transition-colors flex items-center gap-1"
+                title="관리자 페이지"
+              >
+                <Settings size={18} />
+                <span className="text-sm font-medium hidden sm:inline">관리자</span>
+              </button>
+            )}
+            <button
+              onClick={handleLogout}
+              className="p-2 -mr-2 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <LogOut size={20} />
+            </button>
+          </div>
         </div>
       </header>
 

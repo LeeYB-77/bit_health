@@ -11,6 +11,12 @@ origins = [
     "http://localhost:3002", # Host-mapped port
     "http://59.10.164.2:3002",
     "http://59.10.164.2:3000",
+    "http://book.bit.kr:3002",
+    "http://wc.bit.kr:3002",
+    "http://reserve.bit.kr:3002",
+    "http://book.bit.kr",
+    "http://wc.bit.kr",
+    "http://reserve.bit.kr",
 ]
 
 app.add_middleware(
