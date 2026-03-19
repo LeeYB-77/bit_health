@@ -345,7 +345,7 @@ function GolfContent() {
                                     placeholder={participants > 1 ? "동반자 이름, 부서 등을 입력해주세요" : "이름, 부서 등 입력 (선택)"}
                                     value={companions}
                                     onChange={(e) => setCompanions(e.target.value)}
-                                    className={`w-full rounded-xl border p-3 text-sm focus:ring-2 outline-none transition-all ${participants > 1 && !companions.trim() ? 'border-red-300 focus:ring-red-200 bg-red-50' : 'border-gray-200 bg-gray-50 focus:ring-blue-500'
+                                    className={`w-full rounded-xl border p-3 text-sm text-gray-900 focus:ring-2 outline-none transition-all ${participants > 1 && !companions.trim() ? 'border-red-300 focus:ring-red-200 bg-red-50' : 'border-gray-200 bg-gray-50 focus:ring-blue-500'
                                         }`}
                                     onKeyPress={(e) => e.key === 'Enter' && handleReserve()}
                                 />
