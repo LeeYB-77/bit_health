@@ -4,7 +4,7 @@ from typing import List
 import openpyxl
 import io
 from .. import schemas, crud, auth, models
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 
 router = APIRouter(
@@ -145,8 +145,9 @@ def get_user_dashboard_stats(
     current_user: models.User = Depends(auth.get_current_active_user),
     db: Session = Depends(auth.get_db)
 ):
-    now = datetime.now()
-    start_of_month = datetime(now.year, now.month, 1)
+    KST = timezone(timedelta(hours=9))
+    now = datetime.now(KST)
+    start_of_month = datetime(now.year, now.month, 1, tzinfo=KST)
     
     # 1. Monthly Exercise Count (Gym Access + Golf Access)
     # We count unique days or total access logs? Request says "Exercise Count". Logs are simplest.
@@ -158,7 +159,7 @@ def get_user_dashboard_stats(
     ).count()
     
     # 2. Today's Golf Reservation
-    start_of_day = datetime(now.year, now.month, now.day)
+    start_of_day = datetime(now.year, now.month, now.day, tzinfo=KST)
     end_of_day = start_of_day + timedelta(days=1)
     
     golf_facility = db.query(models.Facility).filter(models.Facility.type == "golf").first()

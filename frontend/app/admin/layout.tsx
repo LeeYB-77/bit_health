@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Home } from 'lucide-react';
 
 export default function AdminLayout({
     children,
@@ -37,15 +38,24 @@ export default function AdminLayout({
                     <h1 className="text-3xl font-bold tracking-tight text-gray-900">
                         관리자 대시보드
                     </h1>
-                    <button
-                        onClick={() => {
-                            localStorage.clear();
-                            router.push('/login');
-                        }}
-                        className="text-sm text-red-600 hover:text-red-800"
-                    >
-                        로그아웃
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => router.push('/')}
+                            className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                        >
+                            <Home size={16} />
+                            사용자 페이지
+                        </button>
+                        <button
+                            onClick={() => {
+                                localStorage.clear();
+                                router.push('/login');
+                            }}
+                            className="text-sm text-red-600 hover:text-red-800"
+                        >
+                            로그아웃
+                        </button>
+                    </div>
                 </div>
             </header>
             <main>
