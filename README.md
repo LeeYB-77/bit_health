@@ -78,3 +78,27 @@ BIT_health/
 ├── deploy_docker_compose.yml # 원격 서버용 Docker 구성 사항 (토큰 등 환경 변수 존재)
 └── docker-compose.yml        # 로컬 테스트용 Docker 구성 사항
 ```
+
+## 🚨 6. 개발 및 운영 시 중요 인지사항 (Important Notes)
+
+프로젝트 유지보수를 위해 반드시 숙지해야 하는 트러블슈팅 및 구조적 특징들입니다.
+
+### 1) 보안 토큰 (Slack 등) 관리 및 Secret Scanning 방지
+- GitHub의 보안 정책으로 인해 소스 코드 파일(예: `docker-compose.yml`) 내부에 명시적인 토큰(`xoxb-106089...` 등)이 적혀있을 경우 **Git Push가 아예 차단**됩니다.
+- 토큰들은 반드시 `.env` 파일에 기록하여 이용하며, `.gitignore`를 통해 Git 추적에서 제외시켜야 합니다.
+- 다행히 `deploy.py` 배포 스크립트는 `.env`를 포함하여 서버로 압축 전송하도록 설계되어 있으므로 서버 컨테이너에는 안전하게 주입됩니다.
+
+### 2) Caddy를 통한 HTTPS 자동 적용 (Let's Encrypt)
+- 프론트엔드와 백엔드는 `Caddy` 웹서버 컨테이너를 거쳐 외부로 서비스됩니다. 
+- `Caddyfile` 설정에 의해 `book.bit.kr` 도메인의 SSL 인증서 발급과 갱신 프로세스가 모두 자동화되어 있어 서버 포트 80번과 443번을 Caddy에 단독으로 할당해 두어야 합니다.
+
+### 3) 프론트엔드 API URL 고정 원칙 (혼합 콘텐츠 방지)
+- 배포 컨테이너 내 Next.js 환경 변수(`NEXT_PUBLIC_API_URL`)는 반드시 `https://book.bit.kr` 로 세팅되어야 합니다(`HTTP` IP 주소 사용 금지).
+- 특히 **빌드 타임(`args`)에도 해당 주소가 주입되도록** Docker Compose에 설정해 두어야 프론트엔드 정적 파일이 올바른 호출을 수행합니다.
+
+### 4) 카카오톡 등 In-App 브라우저 로그인 세션 분리 현상
+- 사용자가 체육관 앞에서 QR 코드를 스캔하여 `https://book.bit.kr/access` 로 접속할 때, 카메라 앱이 네이버나 카카오 웹뷰(In-App Browser)로 창을 열면 기존 사파리/크롬 브라우저와 별도의 로컬 저장소(`localStorage`)를 가지게 됩니다.
+- 이 때문에 "이중 로그인을 요구한다"고 오인할 수 있으나, 정상적인 보안 분리 동작입니다. 사용자에게는 **"기본 브라우저(Safari/Chrome)로 전환해서 열기"** 기능을 안내하는 것이 올바른 대응입니다.
+
+### 5) SSO 콜백 URL은 `https`로 일치시킬 것
+- 외부 SSO 서버(drive.bit.kr)에서 인증을 마친 뒤 프론트엔드로 리턴하는 콜백 주소(`redirect_uri`)는 로직 내부 코딩 시 무조건 `https://book.bit.kr/login/callback` 을 명시적으로 사용해야 중간에 HTTP -> HTTPS 리다이렉트를 타면서 생기는 토큰 분실 위험을 차단할 수 있습니다.
