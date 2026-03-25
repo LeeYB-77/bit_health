@@ -24,6 +24,8 @@ services:
       - "8002:8000"
     environment:
       DATABASE_URL: postgresql://bit_health_user:bit_health_password@db:5432/bit_health_db
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
+      TZ: Asia/Seoul
     depends_on:
       - db
     restart: always
@@ -38,7 +40,8 @@ services:
     ports:
       - "3002:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8002
+      NEXT_PUBLIC_API_URL: http://59.10.164.2:8002
+      TZ: Asia/Seoul
     depends_on:
       - backend
     restart: always

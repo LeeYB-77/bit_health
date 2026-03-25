@@ -37,7 +37,8 @@ class ReservationBase(BaseModel):
     start_time: datetime
     end_time: datetime
     participant_count: int = 1
-    companions: Optional[str] = None # JSON string
+    companions: Optional[str] = None
+    priority: int = 3  # 1: 최우선, 2: 우선, 3: 양보
 
 class ReservationCreate(ReservationBase):
     pass
@@ -47,6 +48,7 @@ class Reservation(ReservationBase):
     user_id: int
     facility_id: int
     status: str
+    priority: int
     
     class Config:
         from_attributes = True

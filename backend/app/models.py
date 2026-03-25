@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Enum
 from sqlalchemy.orm import relationship
 from .database import Base
 from datetime import datetime
@@ -13,6 +13,7 @@ class User(Base):
     role = Column(String, default="user") # user, admin
     department = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    golf_suspended_until = Column(DateTime, nullable=True)  # 미사용 패널티: 이 시각까지 예약 불가
 
 class Facility(Base):
     __tablename__ = "facilities"
@@ -29,8 +30,10 @@ class Reservation(Base):
     start_time = Column(DateTime)
     end_time = Column(DateTime)
     participant_count = Column(Integer, default=1)
-    companions = Column(Text, nullable=True) # JSON string: [{"name": "홍길동", "dept": "인사팀"}, ...]
-    status = Column(String, default="reserved") # reserved, canceled, completed
+    companions = Column(Text, nullable=True)
+    status = Column(String, default="reserved") # reserved, canceled, completed, used, no_show
+    priority = Column(Integer, default=3)  # 1: 최우선(비트직원), 2: 우선(직원+고객), 3: 양보(직원+가족)
+    notified_slack = Column(Boolean, default=False)  # 예약 1시간 전 알림 전송 여부
 
     user = relationship("User")
     facility = relationship("Facility")

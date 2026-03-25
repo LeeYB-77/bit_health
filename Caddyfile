@@ -1,0 +1,7 @@
+book.bit.kr {
+    # 백엔드 API 라우팅
+    reverse_proxy /api/* bit_health_backend:8000
+    
+    # 그 외 모든 요청은 프론트엔드로 라우팅
+    reverse_proxy * bit_health_frontend:3000
+}

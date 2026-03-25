@@ -22,6 +22,8 @@ services:
       - "8002:8000"
     environment:
       DATABASE_URL: postgresql://bit_health_user:bit_health_password@db:5432/bit_health_db
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
+      TZ: Asia/Seoul
     depends_on:
       - db
     restart: always
@@ -30,15 +32,31 @@ services:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_API_URL: http://59.10.164.2:8002
+        NEXT_PUBLIC_API_URL: https://book.bit.kr
     container_name: bit_health_frontend
-    ports:
-      - "80:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://59.10.164.2:8002
+      NEXT_PUBLIC_API_URL: https://book.bit.kr
+      TZ: Asia/Seoul
     depends_on:
       - backend
     restart: always
 
+  caddy:
+    image: caddy:2-alpine
+    container_name: bit_health_caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:

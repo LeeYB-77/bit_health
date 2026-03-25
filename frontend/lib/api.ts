@@ -63,6 +63,9 @@ export interface GolfSlot {
   end_time: string;
   available: boolean;
   type: 'weekday' | 'weekend';
+  taken_by_priority: number | null;  // 1,2,3 또는 null
+  taken_res_id: number | null;
+  can_preempt: boolean;              // 3시간 전 조건 충족 여부
 }
 
 export interface Reservation {
@@ -72,13 +75,14 @@ export interface Reservation {
   participant_count: number;
   companions: string | null;
   status: string;
+  priority: number;  // 1: 최우선, 2: 우선, 3: 양보
 }
 
 export const getGolfSlots = async (date: string): Promise<GolfSlot[]> => {
   return fetcher(`/api/golf/slots?date=${date}`);
 };
 
-export const reserveGolf = async (data: { start_time: string, end_time: string, participant_count: number, companions: string | null }) => {
+export const reserveGolf = async (data: { start_time: string, end_time: string, participant_count: number, companions: string | null, priority: number }) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
   const res = await fetch(`${API_URL}/api/golf/reserve`, {
     method: 'POST',
