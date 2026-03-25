@@ -19,7 +19,7 @@ function LoginForm() {
       sessionStorage.removeItem('postLoginRedirect');
     }
     const clientId = 'bit_health';
-    const redirectUri = 'http://book.bit.kr/login/callback';
+    const redirectUri = 'https://book.bit.kr/login/callback';
     const state = 'login_' + Math.random().toString(36).substring(7);
     const authUrl = `https://drive.bit.kr/auth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=openid email profile&state=${state}`;
     window.location.href = authUrl;

@@ -29,6 +29,7 @@ class Token(BaseModel):
     token_type: str
     user_name: str
     role: str
+    is_new_user: Optional[bool] = False
 
 class TokenData(BaseModel):
     user_id: Optional[str] = None

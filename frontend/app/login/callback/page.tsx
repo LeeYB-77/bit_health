@@ -25,12 +25,16 @@ function CallbackHandler() {
 
     const processLogin = async () => {
       try {
-        const redirectUri = 'http://book.bit.kr/login/callback';
+        const redirectUri = 'https://book.bit.kr/login/callback';
         const data = await ssoLogin(code, redirectUri);
         
         localStorage.setItem('access_token', data.access_token);
         localStorage.setItem('user_name', data.user_name);
         localStorage.setItem('user_role', data.role);
+        
+        if (data.is_new_user) {
+          alert('사용자 등록 완료');
+        }
 
         const postLoginRedirect = sessionStorage.getItem('postLoginRedirect');
         if (postLoginRedirect) {

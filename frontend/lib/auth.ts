@@ -11,6 +11,7 @@ export interface LoginResponse {
   token_type: string;
   user_name: string;
   role: string;
+  is_new_user?: boolean;
 }
 
 export const login = async (name: string, birthDate: string): Promise<LoginResponse> => {
