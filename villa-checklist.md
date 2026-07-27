@@ -9,9 +9,11 @@
 ## Phase 1 — 스키마 및 기반
 
 - [ ] `models.py` — `VillaReservation` 추가 (Date 타입, `created_at`은 KST naive)
+- [ ] `models.py` — `VillaReservation`에 취소 승인 컬럼 4개 (`cancel_requested_at`, `cancel_reason`, `canceled_at`, `canceled_by`)
 - [ ] `models.py` — `VillaBookingRound` 추가
-- [ ] `schemas.py` — 신청/조회/추가입력 Pydantic 스키마
-- [ ] `initial_data.py` — 청평별장·동비재 `type='villa'` 시드 추가
+- [ ] `schemas.py` — 신청/조회/추가입력/취소요청 Pydantic 스키마
+- [ ] `initial_data.py` — 청평별장·동비재 `type='villa'`, **capacity 20** 시드 추가
+- [ ] `initial_data.py` — `villa_settings` 기본값 시드 (`peak_months: [7,8]`, `peak_max_nights: 2`)
 - [ ] `migrate_villa.py` — 운영 DB 마이그레이션 스크립트 (`remote_config` 사용)
 - [ ] `conftest.py` — `facilities` 픽스처에 villa 2개 추가
 - [ ] ✅ 검증: 기존 93개 테스트 여전히 통과 (회귀 없음)
@@ -27,13 +29,17 @@
 - [ ] `GET /api/villa/calendar` — 확정/신청중/내신청 구분 반환
 - [ ] `POST /api/villa/apply` — 중복 신청 허용, 접수 기간 검증
 - [ ] `GET /api/villa/my` — 내 신청 목록
-- [ ] `POST /api/villa/cancel/{id}` — 본인 취소
-- [ ] 인원 상한 검증 (`Facility.capacity`)
-- [ ] 연박 상한 검증 (열린 항목 7 확정 후)
+- [ ] `POST /api/villa/cancel/{id}` — `applied` 상태만 즉시 취소
+- [ ] `POST /api/villa/cancel-request/{id}` — `confirmed` 상태 취소 요청 + 관리자 Slack 알림
+- [ ] 인원 상한 검증 (`capacity` 20명)
+- [ ] 성수기 연박 제한 — **기간이 7·8월을 하루라도 포함하면 2박까지**
+- [ ] 월말 걸침 연박 — 체크인 날짜 기준으로 회차 판정
 - [ ] ✅ 테스트: 겹침 경계 (`8/1~8/3` vs `8/3~8/5` 비충돌)
 - [ ] ✅ 테스트: 같은 기간 중복 신청 허용
 - [ ] ✅ 테스트: 접수 기간 외 정규신청 거부
-- [ ] ✅ 테스트: 인원 초과 거부, 과거 날짜 거부
+- [ ] ✅ 테스트: 성수기 판정 — `7/10~7/12` 허용 / `7/10~7/13` 거부 / `6/30~7/3` 거부 / `6/25~6/28` 허용 / `9/1~9/8` 허용
+- [ ] ✅ 테스트: 인원 초과(21명) 거부, 과거 날짜 거부
+- [ ] ✅ 테스트: `confirmed` 예약에 즉시 취소 시도 거부 (요청 경로로만 가능)
 - [ ] 📦 커밋: `feat: 비트별장 신청/조회 API 추가`
 
 ## Phase 3 — 사용자 UI
@@ -51,18 +57,24 @@
 - [ ] ✅ 검증: 로컬에서 달력·신청 플로우 화면 확인
 - [ ] 📦 커밋: `feat: 비트별장 예약 달력 UI 및 메뉴 배치`
 
-## Phase 4 — 관리자 확정
+## Phase 4 — 관리자 확정 및 취소 승인
 
 - [ ] `GET /api/villa/admin/applications` — 겹치는 신청을 그룹으로 묶어 반환
 - [ ] 과거 이용 이력 횟수 집계 (공정성 판단 근거)
 - [ ] `POST /api/villa/admin/confirm/{id}` — 확정 + 나머지 자동 `rejected`
 - [ ] `GET/POST /api/villa/admin/rounds` — 회차 조회·수동 생성
+- [ ] `GET /api/villa/admin/cancel-requests` — 승인 대기 취소 요청 목록
+- [ ] `POST /api/villa/admin/cancel-approve/{id}` — `canceled` 전환, 기간 재개방
+- [ ] `POST /api/villa/admin/cancel-reject/{id}` — `confirmed` 복귀
 - [ ] `app/admin/villa/page.tsx` — 경합 그룹 나란히 표시, 확정 버튼
+- [ ] `app/admin/villa/page.tsx` — **상단에 취소 요청 섹션** (방치되면 기간이 묶이므로 먼저 노출)
 - [ ] `app/admin/page.tsx` — 비트별장 관리 카드 추가
 - [ ] ✅ 테스트: 확정 시 겹치는 나머지만 `rejected`, 무관한 건은 유지
 - [ ] ✅ 테스트: 일반 사용자 접근 차단
 - [ ] ✅ 테스트: 이미 확정된 기간에 재확정 시도 거부
-- [ ] 📦 커밋: `feat: 비트별장 관리자 확정 기능`
+- [ ] ✅ 테스트: 취소 승인 후 같은 기간 선착순 신청 가능
+- [ ] ✅ 테스트: 취소 반려 시 `confirmed` 복귀, 기간 유지
+- [ ] 📦 커밋: `feat: 비트별장 관리자 확정 및 취소 승인 기능`
 
 ## Phase 5 — SMTP 설정 (암호화)
 
@@ -83,7 +95,7 @@
 
 ## Phase 6 — 확정 통보 + 추가입력
 
-- [ ] `villa_utils.py` 또는 `slack_utils.py` 확장 — 확정/미선정 통보 문구
+- [ ] `villa_utils.py` 또는 `slack_utils.py` 확장 — 확정/미선정/취소승인/취소반려 통보 문구
 - [ ] Slack DM + 메일 동시 발송, 추가입력 링크 포함
 - [ ] `POST /api/villa/admin/notify/{round_id}` — 일괄 통보, `notified_confirmed` 플래그로 중복 방지
 - [ ] `GET/POST /api/villa/{id}/extra` — 본인만, `confirmed` 상태만
@@ -115,7 +127,9 @@
 - [ ] `docker compose up -d --build` 실제 PostgreSQL로 기동
 - [ ] `migrate_villa.py` 로컬 검증 후 원격 실행
 - [ ] 수동: 정규예약 신청 → 중복 경합 → 관리자 확정 → 통보 → 추가입력 전체 플로우
+- [ ] 수동: 확정 후 취소 요청 → 관리자 승인 → 기간 재개방 확인
 - [ ] 수동: 선착순 신청 플로우
+- [ ] 수동: 7·8월 3박 신청이 거부되는지 확인
 - [ ] 수동: SMTP 테스트 메일 실제 수신 확인
 - [ ] 수동: Slack DM 실제 수신 확인
 - [ ] 수동: 달력에서 확정/신청중 구분이 직관적인지 확인
@@ -126,14 +140,19 @@
 
 ---
 
-## 착수 전 확인 필요 (열린 항목)
+## 확정된 사양
 
-[villa-feature-plan.md](villa-feature-plan.md) 13절 참조. 1·6·7번은 Phase 2 이전에 답이 필요하다.
+- 정원: 청평별장 20명 / 동비재 20명
+- 연박 상한: 7·8월 최대 2박3일, 그 외 달 제한 없음
+- 확정 후 취소: 관리자 승인 필요 (`cancel_requested` → 승인/반려)
 
-1. [ ] 확정 후 취소 정책 — 선착순 재개방 vs 관리자 승인
-2. [ ] 이번 달 출석 중복 표시 정리 여부
-3. [ ] 선착순 즉시 확정 (기본안 승인 여부)
-4. [ ] 성인+아동 합계 불일치 처리 (기본안 승인 여부)
-5. [ ] 통보일 미확정 건 처리 (기본안 승인 여부)
-6. [ ] **실제 정원** — 청평별장 / 동비재 각각 몇 명까지
-7. [ ] **연박 상한** — 최대 몇 박까지 허용
+## 남은 열린 항목 (기본안 있음, 이견 없으면 진행)
+
+[villa-feature-plan.md](villa-feature-plan.md) 13절 참조. Phase 3 착수 전 1번만 답이 필요하다.
+
+1. [ ] 이번 달 출석 중복 표시 정리 여부 (Phase 3에 영향)
+2. [ ] 선착순 즉시 확정 (기본안 승인 여부)
+3. [ ] 성인+아동 합계 불일치 처리 (기본안 승인 여부)
+4. [ ] 통보일 미확정 건 처리 (기본안 승인 여부)
+5. [ ] 성수기 연박 판정 기준 — 기본안은 "기간이 7·8월 포함 시 2박". 체크인 월 기준으로 완화 가능
+6. [ ] 취소 사유 필수 입력 여부 (기본안은 선택)
