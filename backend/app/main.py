@@ -34,7 +34,7 @@ app.include_router(users.router)
 app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(gym.router)
-app.include_router(golf.router) # Now golf is in __init__? Check first.
+app.include_router(golf.router)
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger

@@ -1,4 +1,4 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://59.10.164.2:8002';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002';
 
 export interface LoginResponse {
   access_token: string;
