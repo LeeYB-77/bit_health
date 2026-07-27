@@ -1,8 +1,10 @@
-# 사용자 대시보드 통계(월간 이용 횟수, 오늘 예약 여부)의 현재 동작을 고정하는 테스트
+# 사용자 대시보드 통계(월간 이용 횟수, 오늘 예약 여부)의 동작을 고정하는 테스트
 #
-# 주의: 이 테스트는 SQLite에서 실행된다. SQLite의 DATETIME 바인딩은 tzinfo를 무시하므로
-# users.py의 tz-aware KST와 naive 컬럼 혼용 문제가 여기서는 드러나지 않는다.
-# Phase 5의 타임존 정합은 Phase 7에서 실제 PostgreSQL로 검증해야 한다.
+# Phase 5 이전에는 users.py가 tz-aware KST datetime을 naive 컬럼과 비교했다.
+# SQLite는 tzinfo를 무시해 이 문제가 여기서는 드러나지 않았지만, PostgreSQL은
+# naive 컬럼에 맞춰 tzinfo를 버리는 과정에서 값이 9시간 어긋날 수 있었다.
+# Phase 5에서 naive datetime.now()로 통일했다. 최종 확인은 Phase 7에서
+# 실제 PostgreSQL로 진행한다.
 from datetime import datetime, timedelta
 
 from app import models
