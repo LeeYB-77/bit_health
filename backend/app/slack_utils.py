@@ -70,6 +70,27 @@ def notify_reservation_preempted(email: str, old_start_time: str, new_user_name:
     
     send_slack_dm(slack_user_id, message)
 
+def notify_villa_cancel_request(email: str, applicant_name: str, villa_name: str, period: str, reason: str = None):
+    """비트별장 확정 예약의 취소 요청을 관리자에게 알립니다."""
+    if not email:
+        return
+
+    slack_user_id = get_slack_user_id_by_email(email)
+    if not slack_user_id:
+        return
+
+    reason_line = f"• *사유*: {reason}\n" if reason else ""
+    message = (
+        f"📩 *[비트별장 취소 요청]*\n\n"
+        f"{applicant_name}님이 확정된 예약의 취소를 요청했습니다.\n"
+        f"• *별장*: {villa_name}\n"
+        f"• *기간*: {period}\n"
+        f"{reason_line}\n"
+        f"관리자 페이지에서 승인 또는 반려해 주세요."
+    )
+
+    send_slack_dm(slack_user_id, message)
+
 def notify_upcoming_reservation(email: str, start_time: str, participant_count: int):
     """예약 1시간 전 Slack 사전 알림 발송"""
     if not email:

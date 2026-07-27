@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base
-from .routers import users, auth, gym, golf, admin
+from .routers import users, auth, gym, golf, admin, villa
 
 app = FastAPI()
 
@@ -35,6 +35,7 @@ app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(gym.router)
 app.include_router(golf.router)
+app.include_router(villa.router)
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger

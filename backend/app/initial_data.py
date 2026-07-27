@@ -3,20 +3,8 @@ import json
 from sqlalchemy.orm import Session
 from app.database import SessionLocal, engine, Base
 from app import crud, schemas, models
-
-# 비트별장 기본 설정. 7·8월은 최대 2박3일, 그 외 달은 제한 없음(null).
-# 성수기 판정은 "이용 기간이 peak_months와 겹치는지"로 한다.
-DEFAULT_VILLA_SETTINGS = {
-    "peak_months": [7, 8],
-    "peak_max_nights": 2,
-    "default_max_nights": None,
-    "default_checkin_time": "15:00",
-    "default_checkout_time": "11:00",
-    "villas": {
-        "청평별장": {"address": "", "notice": ""},
-        "동비재": {"address": "", "notice": ""},
-    },
-}
+# 기본값은 이 설정을 실제로 읽는 라우터가 소유한다. 중복 정의를 만들지 않는다.
+from app.routers.villa import DEFAULT_VILLA_SETTINGS
 
 
 def init_db():
