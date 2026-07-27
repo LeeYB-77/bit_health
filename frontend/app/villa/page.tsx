@@ -9,7 +9,7 @@ import {
 import {
     getVillas, getVillaRound, getVillaCalendar, getMyVillaReservations,
     applyVilla, cancelVillaApplication, requestVillaCancel,
-    Villa, VillaRound, VillaCalendarItem, VillaMyReservation, VillaStatus,
+    Villa, VillaRound, VillaCalendarItem, VillaMyReservation, VillaStatus, VillaBookingMode,
 } from '@/lib/api';
 
 // --- 날짜 헬퍼 ---
@@ -79,6 +79,7 @@ export default function VillaPage() {
     const [selectedVillaId, setSelectedVillaId] = useState<number | null>(null);
     const [round, setRound] = useState<VillaRound | null>(null);
     const [items, setItems] = useState<VillaCalendarItem[]>([]);
+    const [bookingMode, setBookingMode] = useState<VillaBookingMode>('closed');
     const [myList, setMyList] = useState<VillaMyReservation[]>([]);
     const [view, setView] = useState<{ year: number; month: number } | null>(null);
 
@@ -127,6 +128,7 @@ export default function VillaPage() {
                 getMyVillaReservations(),
             ]);
             setItems(calendar.items);
+            setBookingMode(calendar.booking_mode);
             setMyList(mine);
         } catch (e) {
             setMessage({ type: 'err', text: e instanceof Error ? e.message : '예약 현황을 불러오지 못했습니다.' });
@@ -166,7 +168,7 @@ export default function VillaPage() {
         return cells;
     }, [view]);
 
-    const isTargetMonth = !!(round && view && round.target_year === view.year && round.target_month === view.month);
+    const canApply = bookingMode !== 'closed';
     const todayISO = toISO(new Date());
 
     const openApply = (dayISO: string) => {
@@ -207,7 +209,12 @@ export default function VillaPage() {
         try {
             await applyVilla({ facility_id: selectedVillaId, ...form });
             setApplyOpen(false);
-            setMessage({ type: 'ok', text: '예약을 신청했습니다. 확정 결과는 마감일에 안내됩니다.' });
+            setMessage({
+                type: 'ok',
+                text: bookingMode === 'open'
+                    ? '선착순 예약이 확정되었습니다. 확정 안내와 추가입력 링크를 보내드렸습니다.'
+                    : '예약을 신청했습니다. 확정 결과는 마감일에 안내됩니다.',
+            });
             await reload();
         } catch (e) {
             setMessage({ type: 'err', text: e instanceof Error ? e.message : '신청에 실패했습니다.' });
@@ -343,10 +350,16 @@ export default function VillaPage() {
                                 </button>
                             </div>
 
-                            {!isTargetMonth && (
+                            {bookingMode === 'open' && (
+                                <p className="text-xs text-emerald-700 bg-emerald-50 rounded-lg p-2.5 mb-3 flex items-start gap-1.5">
+                                    <Info size={14} className="mt-0.5 shrink-0" />
+                                    정규예약이 끝난 달입니다. 남은 날짜는 <b className="mx-0.5">선착순</b>으로 신청 즉시 확정됩니다.
+                                </p>
+                            )}
+                            {bookingMode === 'closed' && (
                                 <p className="text-xs text-gray-500 bg-gray-50 rounded-lg p-2.5 mb-3 flex items-start gap-1.5">
                                     <Info size={14} className="mt-0.5 shrink-0" />
-                                    이 달은 현재 접수 대상이 아닙니다. 조회만 가능합니다.
+                                    이 달은 아직 접수 대상이 아닙니다. 조회만 가능합니다.
                                 </p>
                             )}
 
@@ -368,7 +381,7 @@ export default function VillaPage() {
                                     const blocked = !!entry?.blocking;
                                     const appliedCount = entry?.applied.length ?? 0;
                                     const isMine = !!entry?.mineId;
-                                    const selectable = isTargetMonth && !isPast && !blocked;
+                                    const selectable = canApply && !isPast && !blocked;
 
                                     // 기간의 시작/끝에만 라운딩을 주면 연박이 하나의 bar로 읽힌다.
                                     const bar = entry?.blocking ?? entry?.applied[0];
@@ -609,10 +622,17 @@ export default function VillaPage() {
                                 />
                             </label>
 
-                            <p className="text-[11px] text-gray-500 bg-gray-50 rounded-lg px-3 py-2 leading-relaxed">
-                                같은 기간에 여러 명이 신청할 수 있습니다. 중복 시 관리자가 확정자를 선정하며,
-                                결과는 마감일에 Slack·메일로 안내됩니다.
-                            </p>
+                            {bookingMode === 'open' ? (
+                                <p className="text-[11px] text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 leading-relaxed">
+                                    선착순 신청입니다. 신청하는 즉시 예약이 확정되며, 확정 안내와 추가입력 링크가
+                                    Slack·메일로 발송됩니다.
+                                </p>
+                            ) : (
+                                <p className="text-[11px] text-gray-500 bg-gray-50 rounded-lg px-3 py-2 leading-relaxed">
+                                    같은 기간에 여러 명이 신청할 수 있습니다. 중복 시 관리자가 확정자를 선정하며,
+                                    결과는 마감일에 Slack·메일로 안내됩니다.
+                                </p>
+                            )}
 
                             {formError && (
                                 <p className="text-xs text-rose-600 font-medium">{formError}</p>

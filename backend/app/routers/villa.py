@@ -118,6 +118,33 @@ def _get_villa_or_404(db: Session, facility_id: int) -> models.Facility:
     return villa
 
 
+def _booking_mode_for(db: Session, start_date: date, today: date):
+    """
+    체크인 날짜가 속한 달의 신청 방식을 판정한다.
+      regular — 현재 정규예약 접수중인 대상월
+      open    — 정규예약 결과 통보가 끝난 달. 남은 날짜를 선착순으로 즉시 확정한다.
+      closed  — 아직 접수 대상이 아니거나(미래), 마감됐지만 결과 통보 전인 달
+    """
+    target_year, target_month = target_month_for_date(today)
+
+    if (start_date.year, start_date.month) == (target_year, target_month):
+        booking_round = get_or_create_round(db, target_year, target_month)
+        if booking_round.status == "open":
+            return "regular", booking_round
+        # 조기 마감된 경우. 통보까지 끝났으면 선착순으로 연다.
+        if booking_round.status == "notified":
+            return "open", booking_round
+        return "closed", booking_round
+
+    existing = db.query(models.VillaBookingRound).filter(
+        models.VillaBookingRound.target_year == start_date.year,
+        models.VillaBookingRound.target_month == start_date.month,
+    ).first()
+    if existing and existing.status == "notified":
+        return "open", existing
+    return "closed", existing
+
+
 def get_or_create_round(db: Session, target_year: int, target_month: int) -> models.VillaBookingRound:
     row = db.query(models.VillaBookingRound).filter(
         models.VillaBookingRound.target_year == target_year,
@@ -239,12 +266,16 @@ def get_calendar(
             "user_dept": (r.user.department if r.user else None) if show_name else None,
         })
 
+    # 조회 전용이므로 회차를 새로 만들지 않도록 1일 기준으로 판정만 한다.
+    mode, _ = _booking_mode_for(db, month_first, datetime.now().date())
+
     return {
         "year": year,
         "month": month,
         "facility_id": villa.id,
         "facility_name": villa.name,
         "capacity": villa.capacity,
+        "booking_mode": mode,  # regular | open | closed
         "items": items,
     }
 
@@ -316,18 +347,17 @@ def apply_villa(
             detail=f"{peak_label}이 포함된 기간은 최대 {max_nights}박까지 신청할 수 있습니다. (신청: {nights}박)",
         )
 
-    # 정규예약은 체크인 날짜가 현재 회차의 대상월에 속해야 한다.
-    # 월말 걸침 연박(10/31~11/2)은 체크인 기준으로 판정하므로 허용된다.
-    target_year, target_month = target_month_for_date(today)
-    if (start.year, start.month) != (target_year, target_month):
+    # 체크인 날짜가 속한 달로 판정한다. 월말 걸침 연박(10/31~11/2)도 체크인 기준이다.
+    mode, booking_round = _booking_mode_for(db, start, today)
+    if mode == "closed":
+        target_year, target_month = target_month_for_date(today)
         raise HTTPException(
             status_code=400,
-            detail=f"현재 접수중인 대상월은 {target_year}년 {target_month}월입니다. 체크인 날짜를 확인해 주세요.",
+            detail=(
+                f"현재 접수중인 대상월은 {target_year}년 {target_month}월입니다. "
+                f"정규예약이 마감된 달은 결과 통보 후 선착순으로 신청할 수 있습니다."
+            ),
         )
-
-    booking_round = get_or_create_round(db, target_year, target_month)
-    if booking_round.status != "open":
-        raise HTTPException(status_code=400, detail="해당 회차의 접수가 마감되었습니다.")
 
     # 확정된 기간과 겹치면 거부. applied끼리는 중복 신청을 허용한다(관리자가 선택).
     if overlapping_query(db, villa.id, start, end, BLOCKING_STATUSES).first():
@@ -340,6 +370,8 @@ def apply_villa(
     if mine:
         raise HTTPException(status_code=400, detail="이미 해당 기간에 신청하셨습니다.")
 
+    # 선착순은 관리자 개입 없이 즉시 확정한다. 정규예약은 마감 후 관리자가 선정한다.
+    is_open_booking = mode == "open"
     reservation = models.VillaReservation(
         user_id=current_user.id,
         facility_id=villa.id,
@@ -348,13 +380,21 @@ def apply_villa(
         checkin_time=payload.checkin_time,
         checkout_time=payload.checkout_time,
         participant_count=payload.participant_count,
-        status="applied",
-        booking_type="regular",
-        round_id=booking_round.id,
+        status="confirmed" if is_open_booking else "applied",
+        booking_type="open" if is_open_booking else "regular",
+        round_id=booking_round.id if booking_round else None,
+        confirmed_at=datetime.now() if is_open_booking else None,
+        confirmed_by=current_user.id if is_open_booking else None,
+        # 즉시 통보하므로 일괄 통보 대상에서 제외한다
+        notified_confirmed=is_open_booking,
     )
     db.add(reservation)
     db.commit()
     db.refresh(reservation)
+
+    if is_open_booking:
+        villa_notify.notify_confirmed(db, reservation)
+
     return reservation
 
 

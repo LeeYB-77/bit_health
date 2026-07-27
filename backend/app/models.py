@@ -75,6 +75,9 @@ class VillaBookingRound(Base):
     apply_end = Column(Date)
     notify_date = Column(Date)
     status = Column(String, default="open")  # open, closed, notified
+    # 스케줄러가 주기적으로 돌므로 1회성 알림에는 발송 플래그가 필수다.
+    reminder_sent = Column(Boolean, default=False)        # 마감 임박 리마인더
+    notify_warning_sent = Column(Boolean, default=False)  # 통보일 미확정 경고
     created_at = Column(DateTime, default=datetime.now)  # KST naive
 
 

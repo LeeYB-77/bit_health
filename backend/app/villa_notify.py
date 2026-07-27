@@ -107,6 +107,61 @@ def notify_cancel_approved(db: Session, reservation) -> bool:
     return _dispatch(db, reservation.user, f"[BIT] {villa} 예약 취소가 승인되었습니다", slack_message, mail_body)
 
 
+def _notify_admins(db: Session, subject: str, slack_message: str, mail_body: str) -> int:
+    from . import models  # 순환 import를 피해 함수 안에서 가져온다
+
+    admins = db.query(models.User).filter(
+        models.User.role == "admin",
+        models.User.email.isnot(None),
+    ).all()
+
+    sent = 0
+    for admin in admins:
+        if _dispatch(db, admin, subject, slack_message, mail_body):
+            sent += 1
+
+    if sent == 0:
+        # 관리자 계정에 이메일이 없으면 알림이 조용히 사라진다. 로그로 드러낸다.
+        logger.warning(f"관리자 알림을 아무에게도 보내지 못했습니다: {subject}")
+    return sent
+
+
+def notify_admins_deadline_soon(db: Session, booking_round, pending_count: int) -> int:
+    """접수 마감이 임박했음을 관리자에게 알린다."""
+    label = f"{booking_round.target_year}년 {booking_round.target_month}월"
+    slack_message = (
+        f"⏰ *[비트별장 정규예약 마감 임박]*\n\n"
+        f"*{label}* 대상 접수가 {booking_round.apply_end}에 마감됩니다.\n"
+        f"• *대기 중인 신청*: {pending_count}건\n\n"
+        f"마감 후 확정 처리를 완료해야 결과가 통보됩니다."
+    )
+    mail_body = (
+        f"{label} 대상 비트별장 정규예약 접수가 {booking_round.apply_end}에 마감됩니다.\n"
+        f"대기 중인 신청: {pending_count}건\n\n"
+        f"마감 후 관리자 페이지에서 확정 처리를 완료해 주세요.\n"
+    )
+    return _notify_admins(db, f"[BIT] 비트별장 {label} 접수 마감 임박", slack_message, mail_body)
+
+
+def notify_admins_notify_blocked(db: Session, booking_round, pending_count: int) -> int:
+    """통보일이 지났는데 미확정 경합이 남아 통보를 보류했음을 알린다."""
+    label = f"{booking_round.target_year}년 {booking_round.target_month}월"
+    slack_message = (
+        f"🚨 *[비트별장 결과 통보 보류]*\n\n"
+        f"*{label}* 대상 통보일({booking_round.notify_date})이 지났지만 "
+        f"확정되지 않은 신청이 *{pending_count}건* 남아 있습니다.\n\n"
+        f"임의로 선정하지 않고 통보를 보류했습니다. "
+        f"관리자 페이지에서 확정을 마치면 결과가 발송됩니다."
+    )
+    mail_body = (
+        f"{label} 대상 비트별장 결과 통보가 보류되었습니다.\n\n"
+        f"통보일: {booking_round.notify_date}\n"
+        f"미확정 신청: {pending_count}건\n\n"
+        f"임의 선정을 하지 않는 정책이므로, 관리자 페이지에서 확정을 마쳐 주세요.\n"
+    )
+    return _notify_admins(db, f"[BIT] 비트별장 {label} 결과 통보 보류", slack_message, mail_body)
+
+
 def notify_cancel_rejected(db: Session, reservation) -> bool:
     villa = _villa_name(reservation)
     period = _period(reservation)

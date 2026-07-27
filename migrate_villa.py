@@ -24,9 +24,14 @@ SQL_COMMANDS = [
         apply_end DATE,
         notify_date DATE,
         status VARCHAR DEFAULT 'open',
+        reminder_sent BOOLEAN DEFAULT FALSE,
+        notify_warning_sent BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP
     );
     """,
+    # 이미 테이블이 있는 환경을 위한 보강 (멱등)
+    "ALTER TABLE villa_booking_rounds ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT FALSE;",
+    "ALTER TABLE villa_booking_rounds ADD COLUMN IF NOT EXISTS notify_warning_sent BOOLEAN DEFAULT FALSE;",
     "CREATE INDEX IF NOT EXISTS ix_villa_booking_rounds_target_year ON villa_booking_rounds (target_year);",
     "CREATE INDEX IF NOT EXISTS ix_villa_booking_rounds_target_month ON villa_booking_rounds (target_month);",
 

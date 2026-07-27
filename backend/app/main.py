@@ -44,6 +44,7 @@ from .database import SessionLocal
 from . import models
 from datetime import datetime, timedelta
 from . import slack_utils
+from . import villa_scheduler
 
 # 스케줄러: 자동 퇴실 및 1시간 전 사전 알림
 def scheduled_jobs():
@@ -110,8 +111,11 @@ def startup_event():
     scheduler = BackgroundScheduler()
     # Run every minute
     scheduler.add_job(scheduled_jobs, CronTrigger(minute='*'))
+    # 비트별장 회차 전이는 날짜 단위라 매분 돌 필요가 없다. 매시 5분에 실행한다.
+    # 관리자가 화면에서 직접 통보할 수도 있으므로 이 작업은 안전망 역할이다.
+    scheduler.add_job(villa_scheduler.scheduled_job, CronTrigger(minute=5))
     scheduler.start()
-    print("Scheduler started (Auto-checkout & Slack notifications every minute)")
+    print("Scheduler started (Auto-checkout & Slack notifications every minute, villa rounds hourly)")
 
 @app.get("/")
 def read_root():

@@ -187,12 +187,16 @@ export interface VillaCalendarItem {
   user_dept: string | null;
 }
 
+/** regular: 정규예약 접수중 / open: 결과 통보 후 선착순 / closed: 신청 불가(조회만) */
+export type VillaBookingMode = 'regular' | 'open' | 'closed';
+
 export interface VillaCalendar {
   year: number;
   month: number;
   facility_id: number;
   facility_name: string;
   capacity: number;
+  booking_mode: VillaBookingMode;
   items: VillaCalendarItem[];
 }
 
