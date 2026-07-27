@@ -142,3 +142,117 @@ export interface UserDashboardStats {
 export const getUserDashboard = async (): Promise<UserDashboardStats> => {
   return fetcher('/api/users/me/dashboard');
 };
+
+// --- 비트별장(휴양소) ---
+
+export interface Villa {
+  id: number;
+  name: string;
+  capacity: number;
+  address: string;
+  notice: string;
+  default_checkin_time: string;
+  default_checkout_time: string;
+}
+
+export interface VillaRound {
+  target_year: number;
+  target_month: number;
+  apply_start: string;
+  apply_end: string;
+  notify_date: string;
+  status: string;
+  is_open: boolean;
+  days_left: number;
+  peak_months: number[];
+  peak_max_nights: number | null;
+}
+
+export type VillaStatus =
+  | 'applied'
+  | 'confirmed'
+  | 'cancel_requested'
+  | 'canceled'
+  | 'rejected';
+
+export interface VillaCalendarItem {
+  id: number;
+  start_date: string;   // YYYY-MM-DD (체크인)
+  end_date: string;     // YYYY-MM-DD (체크아웃, 배타적)
+  nights: number;
+  status: VillaStatus;
+  is_mine: boolean;
+  participant_count: number;
+  user_name: string | null;   // 경합 중인 타인 신청은 null
+  user_dept: string | null;
+}
+
+export interface VillaCalendar {
+  year: number;
+  month: number;
+  facility_id: number;
+  facility_name: string;
+  capacity: number;
+  items: VillaCalendarItem[];
+}
+
+export interface VillaMyReservation {
+  id: number;
+  facility_id: number;
+  facility_name: string | null;
+  start_date: string;
+  end_date: string;
+  nights: number;
+  checkin_time: string | null;
+  checkout_time: string | null;
+  participant_count: number;
+  status: VillaStatus;
+  booking_type: string;
+  cancel_reason: string | null;
+  needs_extra_info: boolean;
+}
+
+export const getVillas = async (): Promise<Villa[]> => {
+  return fetcher('/api/villa/facilities');
+};
+
+export const getVillaRound = async (): Promise<VillaRound> => {
+  return fetcher('/api/villa/current-round');
+};
+
+export const getVillaCalendar = async (
+  facilityId: number,
+  year: number,
+  month: number
+): Promise<VillaCalendar> => {
+  return fetcher(`/api/villa/calendar?facility_id=${facilityId}&year=${year}&month=${month}`);
+};
+
+export const getMyVillaReservations = async (): Promise<VillaMyReservation[]> => {
+  return fetcher('/api/villa/my');
+};
+
+export const applyVilla = async (data: {
+  facility_id: number;
+  start_date: string;
+  end_date: string;
+  checkin_time: string;
+  checkout_time: string;
+  participant_count: number;
+}) => {
+  return fetcher('/api/villa/apply', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+export const cancelVillaApplication = async (id: number) => {
+  return fetcher(`/api/villa/cancel/${id}`, { method: 'POST' });
+};
+
+export const requestVillaCancel = async (id: number, reason: string | null) => {
+  return fetcher(`/api/villa/cancel-request/${id}`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+};

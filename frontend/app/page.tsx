@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getGymStatus, GymStatus, getUserDashboard, UserDashboardStats } from '@/lib/api';
-import { Activity, MapPin, LogOut, ChevronRight, BarChart3, Settings } from 'lucide-react';
+// Home은 이 파일의 기본 export 함수명과 겹치므로 별칭을 쓴다.
+import { Activity, MapPin, LogOut, ChevronRight, BarChart3, Settings, Home as HomeIcon } from 'lucide-react';
 import Image from 'next/image';
 
 export default function Home() {
@@ -152,18 +153,35 @@ export default function Home() {
             </div>
           </button>
 
-          {/* Monthly Stats */}
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex flex-col gap-3">
+          {/* Villa Reservation */}
+          <button
+            onClick={() => router.push('/villa')}
+            className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-left flex flex-col gap-3 active:scale-[0.97] transition-transform group"
+          >
+            <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg w-fit">
+              <HomeIcon size={18} />
+            </div>
+            <div>
+              <p className="font-bold text-gray-800">비트별장</p>
+              <p className="text-gray-400 text-sm mt-0.5">청평·동비재</p>
+            </div>
+          </button>
+        </div>
+
+        {/* Monthly Stats - 스크린골프 아래 */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
             <div className="p-1.5 bg-purple-50 text-purple-600 rounded-lg w-fit">
               <BarChart3 size={18} />
             </div>
             <div>
-              <p className="font-bold text-gray-800">이번 달</p>
-              <div className="flex items-baseline gap-1 mt-0.5">
-                <span className="text-2xl font-bold text-purple-600">{dashboardStats.monthly_count}</span>
-                <span className="text-sm text-gray-400">회 출석</span>
-              </div>
+              <p className="font-bold text-gray-800">이번 달 헬스장 출석</p>
+              <p className="text-gray-400 text-xs mt-0.5">꾸준함이 실력입니다</p>
             </div>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-bold text-purple-600">{dashboardStats.monthly_count}</span>
+            <span className="text-sm text-gray-400">회</span>
           </div>
         </div>
 
