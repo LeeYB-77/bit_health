@@ -5,7 +5,13 @@ def get_user(db: Session, user_id: int):
     return db.query(models.User).filter(models.User.id == user_id).first()
 
 def get_user_by_name_and_birth(db: Session, name: str, birth_date: str):
-    return db.query(models.User).filter(models.User.name == name, models.User.birth_date == birth_date).first()
+    # birth_date가 None이면 `== None`이 SQL `IS NULL`로 컴파일되어 생년월일이 없는
+    # SSO 사용자와 매칭된다. 이름만으로 로그인이 뚫리므로 NULL 행은 항상 제외한다.
+    return db.query(models.User).filter(
+        models.User.name == name,
+        models.User.birth_date == birth_date,
+        models.User.birth_date.isnot(None),
+    ).first()
 
 def get_user_by_sub(db: Session, sub: str):
     return db.query(models.User).filter(models.User.sub == sub).first()

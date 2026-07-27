@@ -22,7 +22,7 @@ class User(UserBase):
 
 class LoginRequest(BaseModel):
     name: str
-    birth_date: Optional[str] = None
+    birth_date: str  # 레거시 로그인은 생년월일이 필수다. Optional이면 인증 우회 경로가 된다.
 
 class Token(BaseModel):
     access_token: str

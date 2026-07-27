@@ -96,14 +96,15 @@ def create_user(
     db: Session = Depends(auth.get_db), 
     current_user: models.User = Depends(auth.get_current_active_admin)
 ):
+    # Validate birth date format (YYMMDD) - simplistic check
+    # 중복 검사보다 앞에 두어야 한다. birth_date가 None일 때 len()이 TypeError로 500을 낸다.
+    if not user.birth_date or len(user.birth_date) != 6 or not user.birth_date.isdigit():
+        raise HTTPException(status_code=400, detail="Birth date must be 6 digits (YYMMDD)")
+
     db_user = crud.get_user_by_name_and_birth(db, name=user.name, birth_date=user.birth_date)
     if db_user:
         raise HTTPException(status_code=400, detail="User already registered")
-    
-    # Validate birth date format (YYMMDD) - simplistic check
-    if len(user.birth_date) != 6 or not user.birth_date.isdigit():
-        raise HTTPException(status_code=400, detail="Birth date must be 6 digits (YYMMDD)")
-        
+
     return crud.create_user(db=db, user=user)
 
 @router.delete("/{user_id}", status_code=204)
