@@ -7,6 +7,8 @@ import os
 # 따라서 미리 sqlite로 지정하지 않으면 테스트가 PostgreSQL 접속을 시도하며 실패한다.
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ.setdefault("SECRET_KEY", "test_secret_key_for_pytest")
+# 전환기 레거시 키 폴백을 검증하기 위해 테스트에서도 설정한다.
+os.environ.setdefault("LEGACY_SECRET_KEY", "legacy_test_secret_key_for_pytest")
 # Slack 토큰이 개발자 셸에 남아 있으면 테스트가 외부 API를 호출하게 된다. 확실히 제거한다.
 os.environ.pop("SLACK_BOT_TOKEN", None)
 
