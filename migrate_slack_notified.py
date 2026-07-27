@@ -4,10 +4,8 @@
 """
 import paramiko
 
-HOST = '59.10.164.2'
-PORT = 22
-USERNAME = 'bitcom'
-PASSWORD = 'bitcom1983!'
+# 접속 정보는 .env에서 읽는다. remote_config 참조
+from remote_config import HOST, PORT, USERNAME, PASSWORD
 
 SQL_COMMANDS = [
     "ALTER TABLE reservations ADD COLUMN IF NOT EXISTS notified_slack BOOLEAN DEFAULT FALSE;"

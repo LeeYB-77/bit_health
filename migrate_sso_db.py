@@ -1,10 +1,10 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-# Remote DB Connection
-DATABASE_URL = "postgresql://bit_health_user:bit_health_password@59.10.164.2:5434/bit_health_db"
+# Remote DB Connection (접속 문자열은 .env의 REMOTE_DATABASE_URL에서 읽는다)
+from remote_config import require_database_url
 
-import os
+DATABASE_URL = require_database_url()
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

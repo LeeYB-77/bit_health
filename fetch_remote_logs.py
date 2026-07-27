@@ -1,10 +1,8 @@
 import paramiko
 import sys
 
-HOST = '59.10.164.2'
-PORT = 22
-USERNAME = 'bitcom'
-PASSWORD = 'bitcom1983!'
+# 접속 정보는 .env에서 읽는다. remote_config 참조
+from remote_config import HOST, PORT, USERNAME, PASSWORD
 
 try:
     ssh = paramiko.SSHClient()

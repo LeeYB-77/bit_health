@@ -4,10 +4,8 @@ SSH를 통해 원격 서버의 PostgreSQL DB에 마이그레이션 적용
 """
 import paramiko
 
-HOST = '59.10.164.2'
-PORT = 22
-USERNAME = 'bitcom'
-PASSWORD = 'bitcom1983!'
+# 접속 정보는 .env에서 읽는다. remote_config 참조
+from remote_config import HOST, PORT, USERNAME, PASSWORD
 
 def run_migration():
     ssh = paramiko.SSHClient()

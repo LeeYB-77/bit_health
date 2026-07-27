@@ -1,11 +1,8 @@
 import paramiko
 import time
 
-# Configuration
-HOST = '59.10.164.2'
-PORT = 22
-USERNAME = 'bitcom'
-PASSWORD = 'bitcom1983!'
+# Configuration (접속 정보는 .env에서 읽는다. remote_config 참조)
+from remote_config import HOST, PORT, USERNAME, PASSWORD
 
 def debug_remote():
     ssh = None
