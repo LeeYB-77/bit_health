@@ -29,6 +29,7 @@ services:
       LEGACY_SECRET_KEY: ${LEGACY_SECRET_KEY}
       ADMIN_EMAILS: ${ADMIN_EMAILS}
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
       TZ: Asia/Seoul
     depends_on:
       - db

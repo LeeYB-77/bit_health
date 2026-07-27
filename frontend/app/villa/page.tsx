@@ -477,10 +477,17 @@ export default function VillaPage() {
                                                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${STATUS_META[r.status].cls}`}>
                                                             {STATUS_META[r.status].label}
                                                         </span>
-                                                        {r.needs_extra_info && (
-                                                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-purple-100 text-purple-700">
-                                                                추가입력 필요
-                                                            </span>
+                                                        {r.status === 'confirmed' && (
+                                                            <button
+                                                                onClick={() => router.push(`/villa/extra/${r.id}`)}
+                                                                className={`text-[10px] px-2 py-0.5 rounded-full font-bold transition-colors ${
+                                                                    r.needs_extra_info
+                                                                        ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                                                                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                                                }`}
+                                                            >
+                                                                {r.needs_extra_info ? '추가입력 필요' : '이용 정보 보기'}
+                                                            </button>
                                                         )}
                                                     </div>
                                                     <p className="text-xs text-gray-600 mt-1.5">

@@ -2,7 +2,7 @@
 
 상세 근거는 [villa-feature-plan.md](villa-feature-plan.md), 작업 중 판단은 [villa-context-notes.md](villa-context-notes.md) 참조.
 
-**진행 상태: Phase 1~5 완료 및 커밋. 테스트 208개 통과, 실 PostgreSQL·브라우저 검증 완료. Phase 6(확정 통보 + 추가입력) 대기.**
+**진행 상태: Phase 1~6 완료 및 커밋. 테스트 233개 통과, 실 PostgreSQL·브라우저 검증 완료. Phase 7(선착순 + 스케줄러) 대기.**
 
 ---
 
@@ -93,18 +93,18 @@
 - [x] ✅ 테스트: 암호화 키 없어도 앱 기동 정상 (메일만 비활성)
 - [x] 📦 커밋: `feat: SMTP 설정 및 비밀번호 암호화 저장`
 
-## Phase 6 — 확정 통보 + 추가입력
+## Phase 6 — 확정 통보 + 추가입력 ✅ 완료
 
-- [ ] `villa_utils.py` 또는 `slack_utils.py` 확장 — 확정/미선정/취소승인/취소반려 통보 문구
-- [ ] Slack DM + 메일 동시 발송, 추가입력 링크 포함
-- [ ] `POST /api/villa/admin/notify/{round_id}` — 일괄 통보, `notified_confirmed` 플래그로 중복 방지
-- [ ] `GET/POST /api/villa/{id}/extra` — 본인만, `confirmed` 상태만
-- [ ] `app/villa/extra/[id]/page.tsx` — 차량대수·차량번호(동적)·성인·아동
-- [ ] 성인+아동 불일치 시 경고 표시 (저장은 허용)
-- [ ] ✅ 테스트: 타인 예약 추가입력 접근 시 403
-- [ ] ✅ 테스트: `applied` 상태 예약에 추가입력 거부
-- [ ] ✅ 테스트: 통보 중복 발송 방지
-- [ ] 📦 커밋: `feat: 비트별장 확정 통보 및 추가입력 페이지`
+- [x] `villa_utils.py` 또는 `slack_utils.py` 확장 — 확정/미선정/취소승인/취소반려 통보 문구
+- [x] Slack DM + 메일 동시 발송, 추가입력 링크 포함
+- [x] `POST /api/villa/admin/notify/{round_id}` — 일괄 통보, `notified_confirmed` 플래그로 중복 방지
+- [x] `GET/POST /api/villa/{id}/extra` — 본인만, `confirmed` 상태만
+- [x] `app/villa/extra/[id]/page.tsx` — 차량대수·차량번호(동적)·성인·아동
+- [x] 성인+아동 불일치 시 경고 표시 (저장은 허용)
+- [x] ✅ 테스트: 타인 예약 추가입력 접근 시 403
+- [x] ✅ 테스트: `applied` 상태 예약에 추가입력 거부
+- [x] ✅ 테스트: 통보 중복 발송 방지
+- [x] 📦 커밋: `feat: 비트별장 확정 통보 및 추가입력 페이지`
 
 ## Phase 7 — 선착순 + 스케줄러
 
@@ -152,7 +152,7 @@
 [villa-feature-plan.md](villa-feature-plan.md) 13절 참조. Phase 3에는 영향이 없다. 아래 항목은 해당 Phase 착수 전까지 확인하면 된다.
 
 1. [ ] 선착순 즉시 확정 (Phase 7) — 기본안은 즉시 확정
-2. [ ] 성인+아동 합계 불일치 처리 (Phase 6) — 기본안은 경고만
+2. [x] 성인+아동 합계 불일치 처리 — **경고만 표시하고 저장 허용**으로 구현 (Phase 6 완료)
 3. [ ] 통보일 미확정 건 처리 (Phase 7) — 기본안은 통보 보류 + 관리자 경고
 4. [x] 취소 사유 필수 입력 여부 — **선택 입력으로 구현** (Phase 2 완료)
 

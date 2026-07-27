@@ -256,3 +256,41 @@ export const requestVillaCancel = async (id: number, reason: string | null) => {
     body: JSON.stringify({ reason }),
   });
 };
+
+export interface VillaExtraInfo {
+  id: number;
+  facility_name: string | null;
+  start_date: string;
+  end_date: string;
+  nights: number;
+  checkin_time: string | null;
+  checkout_time: string | null;
+  participant_count: number;
+  status: VillaStatus;
+  vehicle_count: number | null;
+  vehicle_numbers: string | null;
+  adult_count: number | null;
+  child_count: number | null;
+  submitted: boolean;
+  composition_total: number;
+  warning?: string | null;
+}
+
+export const getVillaExtraInfo = async (id: number): Promise<VillaExtraInfo> => {
+  return fetcher(`/api/villa/${id}/extra`);
+};
+
+export const saveVillaExtraInfo = async (
+  id: number,
+  data: {
+    vehicle_count: number;
+    vehicle_numbers: string | null;
+    adult_count: number;
+    child_count: number;
+  }
+): Promise<VillaExtraInfo> => {
+  return fetcher(`/api/villa/${id}/extra`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from .. import models, auth, schemas, slack_utils
+from .. import models, auth, schemas, slack_utils, villa_notify
 from ..database import get_db
 
 router = APIRouter(
@@ -421,6 +421,88 @@ def request_cancel(
     return {"message": "취소 요청이 접수되었습니다. 관리자 승인 후 취소됩니다."}
 
 
+# --- 추가 입력사항 (확정 후) ---
+
+def _get_own_reservation_or_error(db: Session, reservation_id: int, current_user):
+    reservation = db.query(models.VillaReservation).filter(
+        models.VillaReservation.id == reservation_id
+    ).first()
+    if not reservation:
+        raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
+    # 차량번호 등 개인정보가 담기므로 본인만 접근할 수 있다. 관리자도 이 경로로는 열지 않는다.
+    if reservation.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="본인의 예약만 조회할 수 있습니다.")
+    return reservation
+
+
+def _extra_info_payload(reservation):
+    total = (reservation.adult_count or 0) + (reservation.child_count or 0)
+    return {
+        "id": reservation.id,
+        "facility_name": reservation.facility.name if reservation.facility else None,
+        "start_date": reservation.start_date,
+        "end_date": reservation.end_date,
+        "nights": nights_of(reservation.start_date, reservation.end_date),
+        "checkin_time": reservation.checkin_time,
+        "checkout_time": reservation.checkout_time,
+        "participant_count": reservation.participant_count,
+        "status": reservation.status,
+        "vehicle_count": reservation.vehicle_count,
+        "vehicle_numbers": reservation.vehicle_numbers,
+        "adult_count": reservation.adult_count,
+        "child_count": reservation.child_count,
+        "submitted": reservation.extra_info_updated_at is not None,
+        "composition_total": total,
+    }
+
+
+@router.get("/{reservation_id}/extra")
+def get_extra_info(
+    reservation_id: int,
+    current_user: models.User = Depends(auth.get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    reservation = _get_own_reservation_or_error(db, reservation_id, current_user)
+    return _extra_info_payload(reservation)
+
+
+@router.post("/{reservation_id}/extra")
+def update_extra_info(
+    reservation_id: int,
+    payload: schemas.VillaExtraInfoUpdate,
+    current_user: models.User = Depends(auth.get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    reservation = _get_own_reservation_or_error(db, reservation_id, current_user)
+    if reservation.status != "confirmed":
+        raise HTTPException(
+            status_code=400,
+            detail="확정된 예약만 추가 정보를 입력할 수 있습니다.",
+        )
+
+    if payload.vehicle_count < 0 or payload.adult_count < 0 or payload.child_count < 0:
+        raise HTTPException(status_code=400, detail="인원과 차량 대수는 0 이상이어야 합니다.")
+
+    reservation.vehicle_count = payload.vehicle_count
+    reservation.vehicle_numbers = (payload.vehicle_numbers or "").strip() or None
+    reservation.adult_count = payload.adult_count
+    reservation.child_count = payload.child_count
+    reservation.extra_info_updated_at = datetime.now()
+    db.commit()
+    db.refresh(reservation)
+
+    # 확정 후 동행 인원이 바뀌는 건 자연스럽다. 강제로 막지 않고 안내만 한다.
+    total = payload.adult_count + payload.child_count
+    warning = None
+    if total != reservation.participant_count:
+        warning = (
+            f"입력하신 인원 {total}명이 신청 인원 {reservation.participant_count}명과 다릅니다. "
+            f"변경이 필요하면 관리팀에 알려 주세요."
+        )
+
+    return {"message": "추가 정보를 저장했습니다.", "warning": warning, **_extra_info_payload(reservation)}
+
+
 def _notify_admins_cancel_request(db: Session, reservation, applicant):
     admins = db.query(models.User).filter(
         models.User.role == "admin",
@@ -627,6 +709,14 @@ def list_applications(
         })
     groups.sort(key=lambda g: (g["start_date"], g["facility_id"]))
 
+    booking_round = db.query(models.VillaBookingRound).filter(
+        models.VillaBookingRound.target_year == year,
+        models.VillaBookingRound.target_month == month,
+    ).first()
+    not_yet_notified = sum(
+        1 for r in confirmed if r.status == "confirmed" and not r.notified_confirmed
+    )
+
     return {
         "year": year,
         "month": month,
@@ -634,6 +724,13 @@ def list_applications(
         "contested_groups": sum(1 for g in groups if g["contested"]),
         "groups": groups,
         "confirmed": [_serialize_application(r, usage) for r in confirmed],
+        "round": {
+            "id": booking_round.id,
+            "status": booking_round.status,
+            "apply_end": booking_round.apply_end,
+            "notify_date": booking_round.notify_date,
+        } if booking_round else None,
+        "unnotified_count": not_yet_notified,
     }
 
 
@@ -724,6 +821,8 @@ def approve_cancel(
     reservation.canceled_at = datetime.now()
     reservation.canceled_by = current_user.id
     db.commit()
+
+    villa_notify.notify_cancel_approved(db, reservation)
     return {"message": "취소를 승인했습니다. 해당 기간이 다시 열립니다."}
 
 
@@ -739,4 +838,60 @@ def reject_cancel(
     reservation.cancel_requested_at = None
     reservation.cancel_reason = None
     db.commit()
+
+    villa_notify.notify_cancel_rejected(db, reservation)
     return {"message": "취소 요청을 반려했습니다. 예약이 유지됩니다."}
+
+
+@router.post("/admin/notify/{round_id}")
+def notify_round_results(
+    round_id: int,
+    current_user: models.User = Depends(auth.get_current_active_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    회차 확정 결과를 일괄 통보한다.
+    미확정 경합이 남아 있으면 보류한다. 임의 자동 선정은 하지 않는다.
+    """
+    booking_round = db.query(models.VillaBookingRound).filter(
+        models.VillaBookingRound.id == round_id
+    ).first()
+    if not booking_round:
+        raise HTTPException(status_code=404, detail="회차를 찾을 수 없습니다.")
+
+    pending = db.query(models.VillaReservation).filter(
+        models.VillaReservation.round_id == round_id,
+        models.VillaReservation.status == "applied",
+    ).count()
+    if pending:
+        raise HTTPException(
+            status_code=400,
+            detail=f"아직 확정되지 않은 신청이 {pending}건 있습니다. 모두 처리한 뒤 통보하세요.",
+        )
+
+    # notified_confirmed 플래그로 중복 발송을 막는다.
+    targets = db.query(models.VillaReservation).filter(
+        models.VillaReservation.round_id == round_id,
+        models.VillaReservation.status.in_(("confirmed", "rejected")),
+        models.VillaReservation.notified_confirmed == False,
+    ).all()
+
+    confirmed_count = 0
+    rejected_count = 0
+    for reservation in targets:
+        if reservation.status == "confirmed":
+            villa_notify.notify_confirmed(db, reservation)
+            confirmed_count += 1
+        else:
+            villa_notify.notify_rejected(db, reservation)
+            rejected_count += 1
+        reservation.notified_confirmed = True
+
+    booking_round.status = "notified"
+    db.commit()
+
+    return {
+        "message": f"확정 {confirmed_count}건, 미선정 {rejected_count}건을 통보했습니다.",
+        "confirmed": confirmed_count,
+        "rejected": rejected_count,
+    }

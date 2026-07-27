@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { API_URL } from '@/lib/api';
-import { AlertTriangle, Calendar, Check, Loader2, Users, X } from 'lucide-react';
+import { AlertTriangle, Calendar, Check, Loader2, Send, Users, X } from 'lucide-react';
 
 interface Application {
     id: number;
@@ -33,6 +33,13 @@ interface Group {
     applications: Application[];
 }
 
+interface RoundInfo {
+    id: number;
+    status: string;
+    apply_end: string;
+    notify_date: string;
+}
+
 interface ApplicationsResponse {
     year: number;
     month: number;
@@ -40,6 +47,8 @@ interface ApplicationsResponse {
     contested_groups: number;
     groups: Group[];
     confirmed: Application[];
+    round: RoundInfo | null;
+    unnotified_count: number;
 }
 
 interface CancelRequest {
@@ -214,6 +223,36 @@ export default function AdminVillaPage() {
                         </div>
                     ))}
                 </div>
+            )}
+
+            {/* 확정 결과 통보 */}
+            {data?.round && (
+                <section className="rounded-2xl bg-white p-5 shadow-sm border border-gray-100 flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                            <Send size={16} className="text-blue-600" /> 확정 결과 통보
+                        </h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                            접수 마감 {data.round.apply_end} · 통보 예정일 {data.round.notify_date}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                            {data.pending_total > 0
+                                ? `대기 중인 신청 ${data.pending_total}건을 모두 확정해야 통보할 수 있습니다.`
+                                : data.unnotified_count > 0
+                                    ? `미통보 ${data.unnotified_count}건에 Slack·메일로 결과를 보냅니다.`
+                                    : '통보할 새 건이 없습니다.'}
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => act(-1, `/api/villa/admin/notify/${data.round!.id}`, '통보했습니다.')}
+                        disabled={busyId === -1 || data.pending_total > 0 || data.unnotified_count === 0}
+                        className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-1.5 shrink-0"
+                    >
+                        {busyId === -1
+                            ? <Loader2 size={14} className="animate-spin" />
+                            : <><Send size={14} /> 결과 통보</>}
+                    </button>
+                </section>
             )}
 
             {/* 신청 그룹 */}
