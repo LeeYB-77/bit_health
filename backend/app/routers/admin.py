@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from .. import schemas, crud, models, database, auth
-from typing import List, Dict, Any
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
 from datetime import datetime, date, timedelta
+from .. import schemas, crud, models, database, auth, crypto_utils, email_utils
 
 router = APIRouter(
     prefix="/api/admin",
@@ -145,5 +146,95 @@ def get_usage_history(period: str = "this_week", db: Session = Depends(database.
             "health_users": list(health_users_set),
             "golf_users": list(golf_users_set)
         })
-        
+
     return result
+
+
+# --- 메일(SMTP) 설정 ---
+
+class SmtpSettingsUpdate(BaseModel):
+    host: str
+    from_email: str
+    port: int = 587
+    use_tls: bool = True
+    username: str = ""
+    from_name: str = ""
+    # 마스킹 값이면 기존 비밀번호 유지, 빈 문자열이면 제거, 그 외에는 새 값으로 교체
+    password: Optional[str] = None
+
+
+class SmtpTestRequest(BaseModel):
+    to_email: str
+
+
+@router.get("/smtp")
+def get_smtp_settings(
+    db: Session = Depends(database.get_db),
+    current_user: schemas.User = Depends(get_current_admin),
+):
+    settings = email_utils.load_settings(db)
+    has_password = bool(settings.get("password_encrypted"))
+    # 평문은 물론 암호문도 절대 내려보내지 않는다.
+    return {
+        "host": settings.get("host", ""),
+        "port": settings.get("port", 587),
+        "use_tls": settings.get("use_tls", True),
+        "username": settings.get("username", ""),
+        "from_name": settings.get("from_name", ""),
+        "from_email": settings.get("from_email", ""),
+        "password": email_utils.MASKED if has_password else "",
+        "password_set": has_password,
+        "encryption_available": crypto_utils.is_available(),
+        "configured": email_utils.is_configured(settings),
+    }
+
+
+@router.post("/smtp")
+def update_smtp_settings(
+    payload: SmtpSettingsUpdate,
+    db: Session = Depends(database.get_db),
+    current_user: schemas.User = Depends(get_current_admin),
+):
+    existing = email_utils.load_settings(db)
+
+    if payload.password is None or payload.password == email_utils.MASKED:
+        password_encrypted = existing.get("password_encrypted", "")
+    elif payload.password == "":
+        password_encrypted = ""
+    else:
+        try:
+            password_encrypted = crypto_utils.encrypt(payload.password)
+        except crypto_utils.EncryptionUnavailable as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    email_utils.save_settings(db, {
+        "host": payload.host.strip(),
+        "port": payload.port,
+        "use_tls": payload.use_tls,
+        "username": payload.username.strip(),
+        "password_encrypted": password_encrypted,
+        "from_name": payload.from_name.strip(),
+        "from_email": payload.from_email.strip(),
+    })
+    return {"message": "메일 설정을 저장했습니다."}
+
+
+@router.post("/smtp/test")
+def send_test_mail(
+    payload: SmtpTestRequest,
+    db: Session = Depends(database.get_db),
+    current_user: schemas.User = Depends(get_current_admin),
+):
+    """관리자가 원인을 봐야 하므로 실패 이유를 그대로 전달한다."""
+    try:
+        email_utils.send_mail_or_raise(
+            db,
+            payload.to_email,
+            "[BIT Wellness Center] 메일 설정 테스트",
+            "이 메일이 도착했다면 SMTP 설정이 정상입니다.\n\n"
+            "비트별장 예약 확정 안내가 이 주소로 발송됩니다.",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"발송 실패: {e}")
+
+    return {"message": f"{payload.to_email} 주소로 테스트 메일을 보냈습니다."}

@@ -175,6 +175,12 @@ export default function AdminDashboard() {
                             >
                                 비트별장 예약 관리 <ArrowRight size={14} />
                             </button>
+                            <button
+                                onClick={() => router.push('/admin/smtp')}
+                                className="w-full py-2 bg-slate-50 text-slate-600 rounded-lg text-sm font-semibold hover:bg-slate-100 transition-colors flex items-center justify-center gap-2"
+                            >
+                                메일(SMTP) 설정 <ArrowRight size={14} />
+                            </button>
                         </div>
                     </div>
                 </div>

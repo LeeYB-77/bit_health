@@ -26,6 +26,7 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       LEGACY_SECRET_KEY: ${LEGACY_SECRET_KEY}
       ADMIN_EMAILS: ${ADMIN_EMAILS}
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY}
       TZ: Asia/Seoul
     depends_on:
       - db

@@ -2,7 +2,7 @@
 
 상세 근거는 [villa-feature-plan.md](villa-feature-plan.md), 작업 중 판단은 [villa-context-notes.md](villa-context-notes.md) 참조.
 
-**진행 상태: Phase 1~4 완료 및 커밋. 테스트 184개 통과, 실 PostgreSQL·브라우저 검증 완료. Phase 5(SMTP 설정) 대기.**
+**진행 상태: Phase 1~5 완료 및 커밋. 테스트 208개 통과, 실 PostgreSQL·브라우저 검증 완료. Phase 6(확정 통보 + 추가입력) 대기.**
 
 ---
 
@@ -76,22 +76,22 @@
 - [x] ✅ 테스트: 취소 반려 시 `confirmed` 복귀, 기간 유지
 - [x] 📦 커밋: `feat: 비트별장 관리자 확정 및 취소 승인 기능`
 
-## Phase 5 — SMTP 설정 (암호화)
+## Phase 5 — SMTP 설정 (암호화) ✅ 완료
 
-- [ ] `.env` — `SETTINGS_ENCRYPTION_KEY` 추가 (`Fernet.generate_key()`)
-- [ ] `crypto_utils.py` 신규 — Fernet 암복호화. **키 부재 시 호출 시점에만 실패**(앱 기동은 정상)
-- [ ] `email_utils.py` 신규 — `smtplib` 기반, 발송 실패를 삼키고 로그만 남김
-- [ ] `GET /api/admin/smtp` — 비밀번호 마스킹 반환
-- [ ] `POST /api/admin/smtp` — 마스킹 값이면 기존 비밀번호 유지
-- [ ] `POST /api/admin/smtp/test` — 테스트 메일 발송
-- [ ] `app/admin/smtp/page.tsx` — 설정 폼 + 연결 테스트 버튼
-- [ ] `docker-compose.yml` / `deploy_docker_compose.yml` — `SETTINGS_ENCRYPTION_KEY` 주입
-- [ ] `app/admin/page.tsx` — 메일 설정 카드 추가
-- [ ] ✅ 테스트: 암복호화 왕복
-- [ ] ✅ 테스트: GET 응답에 평문 비밀번호가 없음
-- [ ] ✅ 테스트: 마스킹 값 POST 시 기존 비밀번호 보존
-- [ ] ✅ 테스트: 암호화 키 없어도 앱 기동 정상 (메일만 비활성)
-- [ ] 📦 커밋: `feat: SMTP 설정 및 비밀번호 암호화 저장`
+- [x] `.env` — `SETTINGS_ENCRYPTION_KEY` 추가 (`Fernet.generate_key()`)
+- [x] `crypto_utils.py` 신규 — Fernet 암복호화. **키 부재 시 호출 시점에만 실패**(앱 기동은 정상)
+- [x] `email_utils.py` 신규 — `smtplib` 기반, 발송 실패를 삼키고 로그만 남김
+- [x] `GET /api/admin/smtp` — 비밀번호 마스킹 반환
+- [x] `POST /api/admin/smtp` — 마스킹 값이면 기존 비밀번호 유지
+- [x] `POST /api/admin/smtp/test` — 테스트 메일 발송
+- [x] `app/admin/smtp/page.tsx` — 설정 폼 + 연결 테스트 버튼
+- [x] `docker-compose.yml` / `deploy_docker_compose.yml` — `SETTINGS_ENCRYPTION_KEY` 주입
+- [x] `app/admin/page.tsx` — 메일 설정 카드 추가
+- [x] ✅ 테스트: 암복호화 왕복
+- [x] ✅ 테스트: GET 응답에 평문 비밀번호가 없음
+- [x] ✅ 테스트: 마스킹 값 POST 시 기존 비밀번호 보존
+- [x] ✅ 테스트: 암호화 키 없어도 앱 기동 정상 (메일만 비활성)
+- [x] 📦 커밋: `feat: SMTP 설정 및 비밀번호 암호화 저장`
 
 ## Phase 6 — 확정 통보 + 추가입력
 
