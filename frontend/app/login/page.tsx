@@ -1,15 +1,46 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { login } from '@/lib/auth';
 import { Loader2, User, Lock, ArrowRight } from 'lucide-react';
 import Image from 'next/image';
 
 function LoginForm() {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect');
+
+  // SSO의 redirect_uri는 https://book.bit.kr로 고정되어 있어(README 5) 로컬에서는
+  // SSO 로그인이 운영으로 돌아간다. 그래서 localhost에서만 개발용 로그인을 노출한다.
+  // 운영 도메인에서는 렌더링 자체가 되지 않는다.
+  const [isLocalhost, setIsLocalhost] = useState(false);
+  const [devName, setDevName] = useState('admin');
+  const [devBirth, setDevBirth] = useState('000000');
+  const [devLoading, setDevLoading] = useState(false);
+  const [devError, setDevError] = useState('');
+
+  useEffect(() => {
+    const host = window.location.hostname;
+    setIsLocalhost(host === 'localhost' || host === '127.0.0.1');
+  }, []);
+
+  const handleDevLogin = async () => {
+    setDevLoading(true);
+    setDevError('');
+    try {
+      const data = await login(devName.trim(), devBirth.trim());
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('user_name', data.user_name);
+      localStorage.setItem('user_role', data.role);
+      router.push(redirect || '/');
+    } catch (e) {
+      setDevError(e instanceof Error ? e.message : '로그인에 실패했습니다.');
+    } finally {
+      setDevLoading(false);
+    }
+  };
 
   const handleSSOLogin = () => {
     setLoading(true);
@@ -58,6 +89,69 @@ function LoginForm() {
           )}
         </button>
       </div>
+
+      {isLocalhost && (
+        <div className="mt-6 pt-6 border-t border-dashed border-gray-200 relative z-10">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+              로컬 개발 전용
+            </span>
+            <span className="text-xs text-gray-400">운영에서는 표시되지 않습니다</span>
+          </div>
+          <p className="text-xs text-gray-500 mb-3 leading-relaxed">
+            SSO는 운영 도메인으로만 돌아오므로 로컬에서는 이름과 생년월일로 로그인합니다.
+          </p>
+
+          <div className="space-y-2">
+            <div className="relative">
+              <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                value={devName}
+                onChange={(e) => setDevName(e.target.value)}
+                placeholder="이름"
+                className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="relative">
+              <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                value={devBirth}
+                onChange={(e) => setDevBirth(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleDevLogin(); }}
+                placeholder="생년월일 6자리"
+                className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {devError && <p className="text-xs text-rose-600">{devError}</p>}
+
+            <button
+              onClick={handleDevLogin}
+              disabled={devLoading || !devName.trim() || !devBirth.trim()}
+              className="w-full bg-gray-800 text-white font-bold py-2.5 rounded-xl text-sm hover:bg-gray-900 disabled:bg-gray-300 flex items-center justify-center gap-2"
+            >
+              {devLoading ? <Loader2 size={16} className="animate-spin" /> : '개발용 로그인'}
+            </button>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {[
+              { name: 'admin', birth: '000000', label: 'admin (관리자)' },
+              { name: '김직원', birth: '900101', label: '김직원' },
+              { name: '박사원', birth: '900102', label: '박사원' },
+              { name: '이과장', birth: '900103', label: '이과장' },
+            ].map((account) => (
+              <button
+                key={account.name}
+                onClick={() => { setDevName(account.name); setDevBirth(account.birth); }}
+                className="text-[11px] px-2 py-1 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+              >
+                {account.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mt-8 text-center relative z-10">
         <p className="text-xs text-gray-400">
