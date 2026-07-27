@@ -63,11 +63,18 @@ def facilities(db):
     """initial_data.py와 동일한 시설 구성을 시드한다."""
     gym = models.Facility(name="Gym", type="gym", capacity=15)
     golf = models.Facility(name="ScreenGolf", type="golf", capacity=1)
-    db.add_all([gym, golf])
+    cheongpyeong = models.Facility(name="청평별장", type="villa", capacity=20)
+    dongbijae = models.Facility(name="동비재", type="villa", capacity=20)
+    db.add_all([gym, golf, cheongpyeong, dongbijae])
     db.commit()
-    db.refresh(gym)
-    db.refresh(golf)
-    return {"gym": gym, "golf": golf}
+    for f in (gym, golf, cheongpyeong, dongbijae):
+        db.refresh(f)
+    return {
+        "gym": gym,
+        "golf": golf,
+        "cheongpyeong": cheongpyeong,
+        "dongbijae": dongbijae,
+    }
 
 
 @pytest.fixture
