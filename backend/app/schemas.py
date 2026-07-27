@@ -111,3 +111,10 @@ class VillaBookingRound(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class VillaRoundUpsert(BaseModel):
+    """회차 수동 생성·상태 변경. 조기 마감 같은 예외 상황에 쓴다."""
+    target_year: int
+    target_month: int
+    status: Optional[str] = None  # open, closed, notified

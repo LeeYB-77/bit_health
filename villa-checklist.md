@@ -2,7 +2,7 @@
 
 상세 근거는 [villa-feature-plan.md](villa-feature-plan.md), 작업 중 판단은 [villa-context-notes.md](villa-context-notes.md) 참조.
 
-**진행 상태: Phase 1~3 완료 및 커밋. 테스트 149개 통과, 실 PostgreSQL·브라우저 검증 완료. Phase 4(관리자 확정) 대기.**
+**진행 상태: Phase 1~4 완료 및 커밋. 테스트 184개 통과, 실 PostgreSQL·브라우저 검증 완료. Phase 5(SMTP 설정) 대기.**
 
 ---
 
@@ -57,24 +57,24 @@
 - [x] ✅ 검증: 로컬에서 달력·신청 플로우 화면 확인
 - [x] 📦 커밋: `feat: 비트별장 예약 달력 UI 및 메뉴 배치`
 
-## Phase 4 — 관리자 확정 및 취소 승인
+## Phase 4 — 관리자 확정 및 취소 승인 ✅ 완료
 
-- [ ] `GET /api/villa/admin/applications` — 겹치는 신청을 그룹으로 묶어 반환
-- [ ] 과거 이용 이력 횟수 집계 (공정성 판단 근거)
-- [ ] `POST /api/villa/admin/confirm/{id}` — 확정 + 나머지 자동 `rejected`
-- [ ] `GET/POST /api/villa/admin/rounds` — 회차 조회·수동 생성
-- [ ] `GET /api/villa/admin/cancel-requests` — 승인 대기 취소 요청 목록
-- [ ] `POST /api/villa/admin/cancel-approve/{id}` — `canceled` 전환, 기간 재개방
-- [ ] `POST /api/villa/admin/cancel-reject/{id}` — `confirmed` 복귀
-- [ ] `app/admin/villa/page.tsx` — 경합 그룹 나란히 표시, 확정 버튼
-- [ ] `app/admin/villa/page.tsx` — **상단에 취소 요청 섹션** (방치되면 기간이 묶이므로 먼저 노출)
-- [ ] `app/admin/page.tsx` — 비트별장 관리 카드 추가
-- [ ] ✅ 테스트: 확정 시 겹치는 나머지만 `rejected`, 무관한 건은 유지
-- [ ] ✅ 테스트: 일반 사용자 접근 차단
-- [ ] ✅ 테스트: 이미 확정된 기간에 재확정 시도 거부
-- [ ] ✅ 테스트: 취소 승인 후 같은 기간 선착순 신청 가능
-- [ ] ✅ 테스트: 취소 반려 시 `confirmed` 복귀, 기간 유지
-- [ ] 📦 커밋: `feat: 비트별장 관리자 확정 및 취소 승인 기능`
+- [x] `GET /api/villa/admin/applications` — 겹치는 신청을 그룹으로 묶어 반환
+- [x] 과거 이용 이력 횟수 집계 (공정성 판단 근거)
+- [x] `POST /api/villa/admin/confirm/{id}` — 확정 + 나머지 자동 `rejected`
+- [x] `GET/POST /api/villa/admin/rounds` — 회차 조회·수동 생성
+- [x] `GET /api/villa/admin/cancel-requests` — 승인 대기 취소 요청 목록
+- [x] `POST /api/villa/admin/cancel-approve/{id}` — `canceled` 전환, 기간 재개방
+- [x] `POST /api/villa/admin/cancel-reject/{id}` — `confirmed` 복귀
+- [x] `app/admin/villa/page.tsx` — 경합 그룹 나란히 표시, 확정 버튼
+- [x] `app/admin/villa/page.tsx` — **상단에 취소 요청 섹션** (방치되면 기간이 묶이므로 먼저 노출)
+- [x] `app/admin/page.tsx` — 비트별장 관리 카드 추가
+- [x] ✅ 테스트: 확정 시 겹치는 나머지만 `rejected`, 무관한 건은 유지
+- [x] ✅ 테스트: 일반 사용자 접근 차단
+- [x] ✅ 테스트: 이미 확정된 기간에 재확정 시도 거부
+- [x] ✅ 테스트: 취소 승인 후 같은 기간 선착순 신청 가능
+- [x] ✅ 테스트: 취소 반려 시 `confirmed` 복귀, 기간 유지
+- [x] 📦 커밋: `feat: 비트별장 관리자 확정 및 취소 승인 기능`
 
 ## Phase 5 — SMTP 설정 (암호화)
 

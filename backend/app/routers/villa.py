@@ -1,9 +1,10 @@
 # 비트별장(청평별장/동비재) 예약 신청·조회 API
 import calendar
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import models, auth, schemas, slack_utils
@@ -440,3 +441,302 @@ def _notify_admins_cancel_request(db: Session, reservation, applicant):
             )
         except Exception as e:
             print(f"Failed to notify admin {admin.id} of villa cancel request: {e}")
+
+
+# --- 관리자 ---
+# 골프가 golf.py 한 파일에 admin 섹션을 두는 패턴을 따른다.
+
+USAGE_WINDOW_DAYS = 365  # 공정성 판단용 이용 이력 집계 기간
+
+
+def _group_overlapping(reservations):
+    """
+    겹치는 신청끼리 연결 요소로 묶는다. A-B가 겹치고 B-C가 겹치면 A·B·C가 한 그룹이다.
+    관리자가 '무엇과 무엇이 얽혀 있는지'를 한눈에 보게 하기 위한 표시용 그룹이며,
+    실제 미선정 처리는 확정된 건과 '직접 겹치는' 신청에만 적용한다.
+    """
+    n = len(reservations)
+    parent = list(range(n))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            a, b = reservations[i], reservations[j]
+            if (a.facility_id == b.facility_id
+                    and a.start_date < b.end_date and a.end_date > b.start_date):
+                ra, rb = find(i), find(j)
+                if ra != rb:
+                    parent[rb] = ra
+
+    buckets = {}
+    for i, r in enumerate(reservations):
+        buckets.setdefault(find(i), []).append(r)
+    return list(buckets.values())
+
+
+def _usage_counts(db: Session, user_ids):
+    """최근 1년간 확정 이용 횟수. 중복 경합에서 공정성 판단의 근거로 쓴다."""
+    if not user_ids:
+        return {}
+    since = datetime.now().date() - timedelta(days=USAGE_WINDOW_DAYS)
+    rows = db.query(
+        models.VillaReservation.user_id,
+        func.count(models.VillaReservation.id),
+    ).filter(
+        models.VillaReservation.user_id.in_(list(user_ids)),
+        models.VillaReservation.status.in_(BLOCKING_STATUSES),
+        models.VillaReservation.start_date >= since,
+    ).group_by(models.VillaReservation.user_id).all()
+    return {user_id: count for user_id, count in rows}
+
+
+def _serialize_application(r, usage_counts):
+    return {
+        "id": r.id,
+        "facility_id": r.facility_id,
+        "facility_name": r.facility.name if r.facility else None,
+        "user_id": r.user_id,
+        "user_name": r.user.name if r.user else "(알 수 없음)",
+        "user_dept": r.user.department if r.user else None,
+        "start_date": r.start_date,
+        "end_date": r.end_date,
+        "nights": nights_of(r.start_date, r.end_date),
+        "checkin_time": r.checkin_time,
+        "checkout_time": r.checkout_time,
+        "participant_count": r.participant_count,
+        "status": r.status,
+        "booking_type": r.booking_type,
+        "created_at": r.created_at,
+        "usage_count": usage_counts.get(r.user_id, 0),
+    }
+
+
+@router.get("/admin/rounds")
+def list_rounds(
+    current_user: models.User = Depends(auth.get_current_active_admin),
+    db: Session = Depends(get_db),
+):
+    rows = db.query(models.VillaBookingRound).order_by(
+        models.VillaBookingRound.target_year.desc(),
+        models.VillaBookingRound.target_month.desc(),
+    ).all()
+
+    counts = dict(
+        db.query(models.VillaReservation.round_id, func.count(models.VillaReservation.id))
+        .filter(models.VillaReservation.status == "applied")
+        .group_by(models.VillaReservation.round_id).all()
+    )
+
+    return [
+        {
+            "id": r.id,
+            "target_year": r.target_year,
+            "target_month": r.target_month,
+            "apply_start": r.apply_start,
+            "apply_end": r.apply_end,
+            "notify_date": r.notify_date,
+            "status": r.status,
+            "pending_count": counts.get(r.id, 0),
+        }
+        for r in rows
+    ]
+
+
+@router.post("/admin/rounds")
+def upsert_round(
+    payload: schemas.VillaRoundUpsert,
+    current_user: models.User = Depends(auth.get_current_active_admin),
+    db: Session = Depends(get_db),
+):
+    """회차를 만들거나 상태를 바꾼다. 조기 마감 같은 예외 상황용."""
+    if not 1 <= payload.target_month <= 12:
+        raise HTTPException(status_code=400, detail="target_month는 1~12 사이여야 합니다.")
+    if payload.status and payload.status not in ("open", "closed", "notified"):
+        raise HTTPException(status_code=400, detail="status는 open, closed, notified 중 하나여야 합니다.")
+
+    row = get_or_create_round(db, payload.target_year, payload.target_month)
+    if payload.status:
+        row.status = payload.status
+        db.commit()
+        db.refresh(row)
+
+    return {
+        "id": row.id,
+        "target_year": row.target_year,
+        "target_month": row.target_month,
+        "apply_start": row.apply_start,
+        "apply_end": row.apply_end,
+        "notify_date": row.notify_date,
+        "status": row.status,
+    }
+
+
+@router.get("/admin/applications")
+def list_applications(
+    year: int = None,
+    month: int = None,
+    facility_id: int = None,
+    current_user: models.User = Depends(auth.get_current_active_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    대상월의 신청 현황. 겹치는 신청끼리 묶어 경합 그룹으로 반환한다.
+    year/month를 생략하면 현재 접수중인 대상월을 쓴다.
+    """
+    if year is None or month is None:
+        year, month = target_month_for_date(datetime.now().date())
+    if not 1 <= month <= 12:
+        raise HTTPException(status_code=400, detail="month는 1~12 사이여야 합니다.")
+
+    month_first = date(year, month, 1)
+    ny, nm = shift_month(year, month, 1)
+    next_month_first = date(ny, nm, 1)
+
+    base = db.query(models.VillaReservation).filter(
+        models.VillaReservation.start_date >= month_first,
+        models.VillaReservation.start_date < next_month_first,
+    )
+    if facility_id:
+        base = base.filter(models.VillaReservation.facility_id == facility_id)
+
+    pending = base.filter(models.VillaReservation.status == "applied").order_by(
+        models.VillaReservation.created_at
+    ).all()
+    confirmed = base.filter(
+        models.VillaReservation.status.in_(BLOCKING_STATUSES)
+    ).order_by(models.VillaReservation.start_date).all()
+
+    usage = _usage_counts(db, {r.user_id for r in pending} | {r.user_id for r in confirmed})
+
+    groups = []
+    for bucket in _group_overlapping(pending):
+        bucket.sort(key=lambda r: (r.created_at or datetime.min, r.id))
+        groups.append({
+            "facility_id": bucket[0].facility_id,
+            "facility_name": bucket[0].facility.name if bucket[0].facility else None,
+            "start_date": min(r.start_date for r in bucket),
+            "end_date": max(r.end_date for r in bucket),
+            "count": len(bucket),
+            "contested": len(bucket) > 1,
+            "applications": [_serialize_application(r, usage) for r in bucket],
+        })
+    groups.sort(key=lambda g: (g["start_date"], g["facility_id"]))
+
+    return {
+        "year": year,
+        "month": month,
+        "pending_total": len(pending),
+        "contested_groups": sum(1 for g in groups if g["contested"]),
+        "groups": groups,
+        "confirmed": [_serialize_application(r, usage) for r in confirmed],
+    }
+
+
+@router.post("/admin/confirm/{reservation_id}")
+def confirm_application(
+    reservation_id: int,
+    current_user: models.User = Depends(auth.get_current_active_admin),
+    db: Session = Depends(get_db),
+):
+    reservation = db.query(models.VillaReservation).filter(
+        models.VillaReservation.id == reservation_id
+    ).first()
+    if not reservation:
+        raise HTTPException(status_code=404, detail="신청을 찾을 수 없습니다.")
+    if reservation.status != "applied":
+        raise HTTPException(status_code=400, detail="신청 상태인 건만 확정할 수 있습니다.")
+
+    if overlapping_query(
+        db, reservation.facility_id, reservation.start_date, reservation.end_date, BLOCKING_STATUSES
+    ).first():
+        raise HTTPException(status_code=409, detail="해당 기간에 이미 확정된 예약이 있습니다.")
+
+    reservation.status = "confirmed"
+    reservation.confirmed_at = datetime.now()
+    reservation.confirmed_by = current_user.id
+
+    # 직접 겹치는 신청만 미선정 처리한다. 연결 요소 전체를 떨어뜨리면
+    # 확정 건과 겹치지 않는 신청까지 부당하게 탈락한다.
+    others = overlapping_query(
+        db, reservation.facility_id, reservation.start_date, reservation.end_date, ("applied",)
+    ).filter(models.VillaReservation.id != reservation.id).all()
+    for other in others:
+        other.status = "rejected"
+
+    db.commit()
+    return {
+        "message": "예약을 확정했습니다.",
+        "rejected_count": len(others),
+    }
+
+
+@router.get("/admin/cancel-requests")
+def list_cancel_requests(
+    current_user: models.User = Depends(auth.get_current_active_admin),
+    db: Session = Depends(get_db),
+):
+    rows = db.query(models.VillaReservation).filter(
+        models.VillaReservation.status == "cancel_requested"
+    ).order_by(models.VillaReservation.cancel_requested_at).all()
+
+    return [
+        {
+            "id": r.id,
+            "facility_name": r.facility.name if r.facility else None,
+            "user_name": r.user.name if r.user else "(알 수 없음)",
+            "user_dept": r.user.department if r.user else None,
+            "start_date": r.start_date,
+            "end_date": r.end_date,
+            "nights": nights_of(r.start_date, r.end_date),
+            "participant_count": r.participant_count,
+            "cancel_requested_at": r.cancel_requested_at,
+            "cancel_reason": r.cancel_reason,
+        }
+        for r in rows
+    ]
+
+
+def _get_cancel_requested_or_400(db: Session, reservation_id: int):
+    reservation = db.query(models.VillaReservation).filter(
+        models.VillaReservation.id == reservation_id
+    ).first()
+    if not reservation:
+        raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
+    if reservation.status != "cancel_requested":
+        raise HTTPException(status_code=400, detail="취소 요청 상태인 건만 처리할 수 있습니다.")
+    return reservation
+
+
+@router.post("/admin/cancel-approve/{reservation_id}")
+def approve_cancel(
+    reservation_id: int,
+    current_user: models.User = Depends(auth.get_current_active_admin),
+    db: Session = Depends(get_db),
+):
+    """승인하면 해당 기간이 풀려 다시 신청 가능해진다."""
+    reservation = _get_cancel_requested_or_400(db, reservation_id)
+    reservation.status = "canceled"
+    reservation.canceled_at = datetime.now()
+    reservation.canceled_by = current_user.id
+    db.commit()
+    return {"message": "취소를 승인했습니다. 해당 기간이 다시 열립니다."}
+
+
+@router.post("/admin/cancel-reject/{reservation_id}")
+def reject_cancel(
+    reservation_id: int,
+    current_user: models.User = Depends(auth.get_current_active_admin),
+    db: Session = Depends(get_db),
+):
+    """반려하면 확정 상태로 되돌아간다. 요청 흔적을 남기면 UI에 취소 요청중으로 잘못 보인다."""
+    reservation = _get_cancel_requested_or_400(db, reservation_id)
+    reservation.status = "confirmed"
+    reservation.cancel_requested_at = None
+    reservation.cancel_reason = None
+    db.commit()
+    return {"message": "취소 요청을 반려했습니다. 예약이 유지됩니다."}

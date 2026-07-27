@@ -6,50 +6,14 @@ import pytest
 
 from app import models
 from app.routers import villa as villa_router
+from villa_helpers import in_target_month, payload, seed, target_month
 
 
-# --- 헬퍼 ---
-
-def _target_month(delta_months=0):
-    """현재 접수중인 대상월(오늘 + 2개월)에 delta_months를 더한 (year, month)."""
-    today = datetime.now().date()
-    return villa_router.shift_month(
-        today.year, today.month, villa_router.REGULAR_LEAD_MONTHS + delta_months
-    )
-
-
-def _in_target_month(day, delta_months=0):
-    y, m = _target_month(delta_months)
-    return date(y, m, day)
-
-
-def _payload(facility_id, start, end, participant_count=4):
-    return {
-        "facility_id": facility_id,
-        "start_date": start.isoformat(),
-        "end_date": end.isoformat(),
-        "checkin_time": "15:00",
-        "checkout_time": "11:00",
-        "participant_count": participant_count,
-    }
-
-
-def _seed(db, user, villa, start, end, status="applied", participant_count=4):
-    row = models.VillaReservation(
-        user_id=user.id,
-        facility_id=villa.id,
-        start_date=start,
-        end_date=end,
-        checkin_time="15:00",
-        checkout_time="11:00",
-        participant_count=participant_count,
-        status=status,
-        booking_type="regular",
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return row
+# 공용 헬퍼는 villa_helpers 모듈에 있다. 기존 호출부 이름을 유지하기 위해 별칭을 둔다.
+_target_month = target_month
+_in_target_month = in_target_month
+_payload = payload
+_seed = seed
 
 
 @pytest.fixture

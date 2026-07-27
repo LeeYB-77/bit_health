@@ -169,6 +169,12 @@ export default function AdminDashboard() {
                             >
                                 입장 QR 코드 <ArrowRight size={14} />
                             </button>
+                            <button
+                                onClick={() => router.push('/admin/villa')}
+                                className="w-full py-2 bg-amber-50 text-amber-700 rounded-lg text-sm font-semibold hover:bg-amber-100 transition-colors flex items-center justify-center gap-2"
+                            >
+                                비트별장 예약 관리 <ArrowRight size={14} />
+                            </button>
                         </div>
                     </div>
                 </div>
