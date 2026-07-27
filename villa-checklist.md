@@ -1,0 +1,139 @@
+# 비트별장 예약 기능 체크리스트
+
+상세 근거는 [villa-feature-plan.md](villa-feature-plan.md), 작업 중 판단은 [villa-context-notes.md](villa-context-notes.md) 참조.
+
+**진행 상태: 기획 완료. 개발 미착수 (사용자 승인 대기).**
+
+---
+
+## Phase 1 — 스키마 및 기반
+
+- [ ] `models.py` — `VillaReservation` 추가 (Date 타입, `created_at`은 KST naive)
+- [ ] `models.py` — `VillaBookingRound` 추가
+- [ ] `schemas.py` — 신청/조회/추가입력 Pydantic 스키마
+- [ ] `initial_data.py` — 청평별장·동비재 `type='villa'` 시드 추가
+- [ ] `migrate_villa.py` — 운영 DB 마이그레이션 스크립트 (`remote_config` 사용)
+- [ ] `conftest.py` — `facilities` 픽스처에 villa 2개 추가
+- [ ] ✅ 검증: 기존 93개 테스트 여전히 통과 (회귀 없음)
+- [ ] 📦 커밋: `feat: 비트별장 예약 스키마 및 시드 추가`
+
+## Phase 2 — 신청·조회 API
+
+- [ ] `routers/villa.py` 신규 — 라우터 등록 (`main.py`)
+- [ ] 회차 산출 로직 — 대상월 2개월 전 1일~말일
+- [ ] 겹침 판정 헬퍼 — `a.start < b.end and a.end > b.start` (체크아웃 배타)
+- [ ] `GET /api/villa/facilities` — 별장 목록 + 설정
+- [ ] `GET /api/villa/current-round` — 현재 접수중 회차
+- [ ] `GET /api/villa/calendar` — 확정/신청중/내신청 구분 반환
+- [ ] `POST /api/villa/apply` — 중복 신청 허용, 접수 기간 검증
+- [ ] `GET /api/villa/my` — 내 신청 목록
+- [ ] `POST /api/villa/cancel/{id}` — 본인 취소
+- [ ] 인원 상한 검증 (`Facility.capacity`)
+- [ ] 연박 상한 검증 (열린 항목 7 확정 후)
+- [ ] ✅ 테스트: 겹침 경계 (`8/1~8/3` vs `8/3~8/5` 비충돌)
+- [ ] ✅ 테스트: 같은 기간 중복 신청 허용
+- [ ] ✅ 테스트: 접수 기간 외 정규신청 거부
+- [ ] ✅ 테스트: 인원 초과 거부, 과거 날짜 거부
+- [ ] 📦 커밋: `feat: 비트별장 신청/조회 API 추가`
+
+## Phase 3 — 사용자 UI
+
+- [ ] `lib/api.ts` — villa API 클라이언트 함수 + 타입
+- [ ] `app/villa/page.tsx` — 별장 토글, 회차 배너, 월 달력
+- [ ] 달력 컴포넌트 — 순수 `Date` 연산, 외부 라이브러리 없음
+- [ ] 연박 bar 렌더링, 확정/신청중/내신청 색 구분, 범례
+- [ ] 신청 모달 — 체크인·체크아웃, 예상 입퇴실 시간, 인원
+- [ ] "내 신청 현황" 섹션 — 상태 배지, 추가입력 필요 표시
+- [ ] `app/page.tsx` — 스크린골프 옆에 "비트별장" 카드 추가
+- [ ] `app/page.tsx` — 이번 달 헬스장 출석을 골프 아래로 이동
+- [ ] ⚠️ 이번 달 출석 중복 표시 정리 (열린 항목 2 확정 후)
+- [ ] ✅ 검증: `npx tsc --noEmit` 통과
+- [ ] ✅ 검증: 로컬에서 달력·신청 플로우 화면 확인
+- [ ] 📦 커밋: `feat: 비트별장 예약 달력 UI 및 메뉴 배치`
+
+## Phase 4 — 관리자 확정
+
+- [ ] `GET /api/villa/admin/applications` — 겹치는 신청을 그룹으로 묶어 반환
+- [ ] 과거 이용 이력 횟수 집계 (공정성 판단 근거)
+- [ ] `POST /api/villa/admin/confirm/{id}` — 확정 + 나머지 자동 `rejected`
+- [ ] `GET/POST /api/villa/admin/rounds` — 회차 조회·수동 생성
+- [ ] `app/admin/villa/page.tsx` — 경합 그룹 나란히 표시, 확정 버튼
+- [ ] `app/admin/page.tsx` — 비트별장 관리 카드 추가
+- [ ] ✅ 테스트: 확정 시 겹치는 나머지만 `rejected`, 무관한 건은 유지
+- [ ] ✅ 테스트: 일반 사용자 접근 차단
+- [ ] ✅ 테스트: 이미 확정된 기간에 재확정 시도 거부
+- [ ] 📦 커밋: `feat: 비트별장 관리자 확정 기능`
+
+## Phase 5 — SMTP 설정 (암호화)
+
+- [ ] `.env` — `SETTINGS_ENCRYPTION_KEY` 추가 (`Fernet.generate_key()`)
+- [ ] `crypto_utils.py` 신규 — Fernet 암복호화. **키 부재 시 호출 시점에만 실패**(앱 기동은 정상)
+- [ ] `email_utils.py` 신규 — `smtplib` 기반, 발송 실패를 삼키고 로그만 남김
+- [ ] `GET /api/admin/smtp` — 비밀번호 마스킹 반환
+- [ ] `POST /api/admin/smtp` — 마스킹 값이면 기존 비밀번호 유지
+- [ ] `POST /api/admin/smtp/test` — 테스트 메일 발송
+- [ ] `app/admin/smtp/page.tsx` — 설정 폼 + 연결 테스트 버튼
+- [ ] `docker-compose.yml` / `deploy_docker_compose.yml` — `SETTINGS_ENCRYPTION_KEY` 주입
+- [ ] `app/admin/page.tsx` — 메일 설정 카드 추가
+- [ ] ✅ 테스트: 암복호화 왕복
+- [ ] ✅ 테스트: GET 응답에 평문 비밀번호가 없음
+- [ ] ✅ 테스트: 마스킹 값 POST 시 기존 비밀번호 보존
+- [ ] ✅ 테스트: 암호화 키 없어도 앱 기동 정상 (메일만 비활성)
+- [ ] 📦 커밋: `feat: SMTP 설정 및 비밀번호 암호화 저장`
+
+## Phase 6 — 확정 통보 + 추가입력
+
+- [ ] `villa_utils.py` 또는 `slack_utils.py` 확장 — 확정/미선정 통보 문구
+- [ ] Slack DM + 메일 동시 발송, 추가입력 링크 포함
+- [ ] `POST /api/villa/admin/notify/{round_id}` — 일괄 통보, `notified_confirmed` 플래그로 중복 방지
+- [ ] `GET/POST /api/villa/{id}/extra` — 본인만, `confirmed` 상태만
+- [ ] `app/villa/extra/[id]/page.tsx` — 차량대수·차량번호(동적)·성인·아동
+- [ ] 성인+아동 불일치 시 경고 표시 (저장은 허용)
+- [ ] ✅ 테스트: 타인 예약 추가입력 접근 시 403
+- [ ] ✅ 테스트: `applied` 상태 예약에 추가입력 거부
+- [ ] ✅ 테스트: 통보 중복 발송 방지
+- [ ] 📦 커밋: `feat: 비트별장 확정 통보 및 추가입력 페이지`
+
+## Phase 7 — 선착순 + 스케줄러
+
+- [ ] 선착순 신청 — `booking_type='open'`, 즉시 `confirmed` (열린 항목 3 확정 후)
+- [ ] 확정 기간과 겹치면 거부
+- [ ] 선착순 확정 시에도 통보 + 추가입력 링크 발송
+- [ ] `main.py` `scheduled_jobs()` 확장 — 매월 1일 회차 자동 생성
+- [ ] 접수 마감 3일 전 관리자 리마인더
+- [ ] 마감일 경과 시 `status='closed'`
+- [ ] 통보일 자동 통보, 미확정 경합 남으면 보류 + 관리자 경고
+- [ ] ⚠️ 1분 주기 실행이므로 모든 작업에 중복 실행 방지 플래그 필수
+- [ ] ✅ 테스트: 선착순 즉시 확정, 겹침 거부
+- [ ] ✅ 테스트: 회차 중복 생성 방지
+- [ ] ✅ 테스트: 통보 보류 조건
+- [ ] 📦 커밋: `feat: 비트별장 선착순 예약 및 회차 자동화`
+
+## Phase 8 — 통합 검증 및 배포
+
+- [ ] `cd backend && pytest` 전체 통과
+- [ ] `docker compose up -d --build` 실제 PostgreSQL로 기동
+- [ ] `migrate_villa.py` 로컬 검증 후 원격 실행
+- [ ] 수동: 정규예약 신청 → 중복 경합 → 관리자 확정 → 통보 → 추가입력 전체 플로우
+- [ ] 수동: 선착순 신청 플로우
+- [ ] 수동: SMTP 테스트 메일 실제 수신 확인
+- [ ] 수동: Slack DM 실제 수신 확인
+- [ ] 수동: 달력에서 확정/신청중 구분이 직관적인지 확인
+- [ ] 기존 기능 회귀 확인 — 헬스 입퇴실, 골프 예약, 관리자 통계
+- [ ] `README.md` — 환경변수 표에 `SETTINGS_ENCRYPTION_KEY` 추가, 별장 기능 설명
+- [ ] `python deploy.py` 원격 배포 (⛔ 사용자 승인 필요)
+- [ ] 배포 후 원격 스모크
+
+---
+
+## 착수 전 확인 필요 (열린 항목)
+
+[villa-feature-plan.md](villa-feature-plan.md) 13절 참조. 1·6·7번은 Phase 2 이전에 답이 필요하다.
+
+1. [ ] 확정 후 취소 정책 — 선착순 재개방 vs 관리자 승인
+2. [ ] 이번 달 출석 중복 표시 정리 여부
+3. [ ] 선착순 즉시 확정 (기본안 승인 여부)
+4. [ ] 성인+아동 합계 불일치 처리 (기본안 승인 여부)
+5. [ ] 통보일 미확정 건 처리 (기본안 승인 여부)
+6. [ ] **실제 정원** — 청평별장 / 동비재 각각 몇 명까지
+7. [ ] **연박 상한** — 최대 몇 박까지 허용
