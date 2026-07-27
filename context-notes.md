@@ -69,3 +69,33 @@ JSONB/ARRAY 미사용. `SystemSetting.value`도 `Text`에 JSON 문자열을 담�
 2. Phase 4 착수 전 관리자 계정의 `email` NULL 여부를 반드시 확인할 것 (결정 4의 미해결 불확실성).
 3. Phase 3의 레거시 키 폴백 제거는 **별도 후속 작업**이며, 잊으면 개선이 미완성이다.
 4. Phase 7의 원격 스모크에서 "기존 브라우저 세션 유지"가 Phase 3 설계의 유일한 실증 검증이다. 새 시크릿 창으로 테스트하면 의미가 없다.
+
+---
+
+## 2026-07-27 — 실행 결과 (Phase 0~7)
+
+전 단계를 `improve/security-and-timezone` 브랜치에서 순서대로 실행, 각 Phase 1커밋으로 마무리했다. 원격 배포(`python deploy.py`)는 실행하지 않았다 — SSH로 운영 서버를 재기동하는 외향적 행동이라 사용자 확인 없이 진행하지 않았다.
+
+### 계획과 실제가 갈린 지점
+
+**Phase 2가 계획보다 훨씬 커졌다.** 사전 조사 때는 `deploy.py`만 봤는데, 실제로 grep해보니 동일한 SSH 비밀번호(`bitcom1983!`)가 `check_remote_status.py`, `cleanup_remote_db.py`, `debug_remote.py`, `fetch_remote_logs.py`, `init_remote_db.py`, `migrate_golf_priority.py`, `migrate_slack_notified.py` 등 7개 파일에 더 하드코딩되어 있었다. `deploy.py` 하나만 고쳤다면 노출이 그대로 남는 상황이었다. `remote_config.py`라는 공용 모듈을 만들어 8개 파일 전부가 참조하도록 했다. `migrate_remote_db.py`/`migrate_sso_db.py`는 SSH가 아니라 DB 접속 문자열을 직접 하드코딩하고 있어 `REMOTE_DATABASE_URL`이라는 별도 키로 분리했다.
+
+**Phase 4 선행 확인에서 예상보다 심각한 사실을 발견했다.** 운영 DB를 읽기 전용으로 직접 조회한 결과:
+- 전체 45명 중 **43명이 `birth_date` NULL** (SSO 사용자 전원)
+- 관리자 4명 중 2명은 레거시(id=2 이영배, id=3 조현정, birth_date 있음), 2명은 SSO(id=144 lyb77@bit.kr, id=147 hjcho@bit.kr)
+- **동명이인이 실제로 2건 존재**(이영배, 조현정 각각 레거시+SSO 계정)
+
+즉 Phase 1이 막은 것과 Phase 4가 막은 것 둘 다 "이론적 취약점"이 아니라 "운영 데이터에 이미 그 조건이 존재하는 상태"였다. 특히 Phase 1 수정 전에는 `{"name":"이영배"}` 한 줄로 id=144 관리자 계정에 로그인이 가능했다 — 이름은 동료에게 공개된 정보라 진입장벽이 사실상 없었다.
+
+이 조회로 `ADMIN_EMAILS` 설계가 그대로 유효함을 확인했다(`ADMIN_SUBS` 대안 불필요, SSO 사용자 전원 email 보유).
+
+### Phase 7 로컬 통합 검증에서 실제로 확인한 것
+
+Docker Desktop이 최초 꺼져 있어 기동 후 `docker compose up -d --build`로 실제 PostgreSQL 15 컨테이너를 띄우고 API를 직접 호출했다. SQLite 유닛테스트로는 드러나지 않는 것들을 이 단계에서 확인했다.
+
+- **Phase 5의 핵심 리스크였던 tz-aware/naive 비교 버그가 실제로 고쳐졌는지**: 오늘 헬스 입실 → `/api/users/me/dashboard`가 `monthly_count: 1` 반환, 오늘 골프 예약 → `has_today_reservation: true` 반환. 둘 다 정상. `User.created_at`도 KST 벽시계 시각(13:51)과 일치해 표시됐다.
+- **Phase 3의 무중단 전환**: 레거시 키(`bit_health_secret_key_2026`)로 서명한 토큰이 여전히 `/api/users/me`에서 200을 받았고, 무관한 키로 서명한 토큰은 401로 거부됐다. 설계대로 동작.
+- **컨테이너 환경변수 주입**: `SECRET_KEY`, `LEGACY_SECRET_KEY`, `ADMIN_EMAILS`, `SLACK_BOT_TOKEN` 전부 `docker exec printenv`로 확인.
+- 사소한 이슈: backend 컨테이너가 db보다 먼저 접속을 시도해 첫 기동에서 크래시했다. `restart: always`가 있지만 uvicorn `--reload` 프로세스 특성상 자동 복구가 즉시 안 일어나 `docker compose restart backend`를 한 번 수동 실행해야 했다. 운영 배포 시 동일 증상이 나올 수 있으니 참고.
+
+**실행하지 않고 남긴 것**: 실제 SSO 로그인 플로우(drive.bit.kr 실서버 필요, 로컬 재현 불가)와 `python deploy.py` 원격 배포. 둘 다 사용자 확인이 필요한 지점이라 checklist.md의 "남은 것" 섹션에 명시했다.

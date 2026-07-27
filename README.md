@@ -102,3 +102,24 @@ BIT_health/
 
 ### 5) SSO 콜백 URL은 `https`로 일치시킬 것
 - 외부 SSO 서버(drive.bit.kr)에서 인증을 마친 뒤 프론트엔드로 리턴하는 콜백 주소(`redirect_uri`)는 로직 내부 코딩 시 무조건 `https://book.bit.kr/login/callback` 을 명시적으로 사용해야 중간에 HTTP -> HTTPS 리다이렉트를 타면서 생기는 토큰 분실 위험을 차단할 수 있습니다.
+
+### 6) 필수 환경 변수 (`.env`)
+- 백엔드는 다음 값이 없으면 기동 시 명확한 오류로 중단됩니다. 최초 배포 전 `.env`에 반드시 채워야 합니다.
+
+| 변수 | 용도 |
+|---|---|
+| `SLACK_BOT_TOKEN` | Slack DM 알림 발송 |
+| `SECRET_KEY` | JWT 서명 키. 미설정 시 백엔드가 `RuntimeError`로 기동 중단 |
+| `LEGACY_SECRET_KEY` | 서명 키 교체 시 기존 발급 토큰(만료 1년)을 계속 수용하기 위한 전환기 전용 키. 구 토큰이 자연 교체된 뒤(대략 2~4주) 제거 |
+| `ADMIN_EMAILS` | SSO 로그인 시 관리자 권한을 부여할 이메일 목록(콤마 구분, 대소문자 무시). 승격만 하고 강등하지 않으므로 DB에 이미 `role='admin'`인 계정은 이 목록에서 빠져도 유지됨 |
+| `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_PASSWORD` / `DEPLOY_PORT` | `deploy.py` 등 로컬 배포·운영 스크립트가 SSH로 접속할 원격 서버 정보 |
+| `REMOTE_DATABASE_URL` | 로컬에서 원격 PostgreSQL에 직접 접속하는 `migrate_*.py` 스크립트용 |
+
+### 7) 백엔드 테스트 실행
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest
+```
+- SQLite 인메모리 DB로 동작하며 실제 서버·DB에 영향을 주지 않습니다.
+- `get_db`가 `database.py`와 `auth.py` 양쪽에 중복 정의되어 있어, 새 라우터를 추가할 때 어느 쪽을 참조하는지 확인하고 `tests/conftest.py`의 `dependency_overrides`에도 반영해야 합니다.
