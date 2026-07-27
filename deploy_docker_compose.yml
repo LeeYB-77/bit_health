@@ -25,6 +25,7 @@ services:
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
       SECRET_KEY: ${SECRET_KEY}
       LEGACY_SECRET_KEY: ${LEGACY_SECRET_KEY}
+      ADMIN_EMAILS: ${ADMIN_EMAILS}
       TZ: Asia/Seoul
     depends_on:
       - db

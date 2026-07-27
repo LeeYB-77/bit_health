@@ -106,20 +106,65 @@ def test_sso_sub_없으면_400(client, mock_sso):
     assert _sso_login(client).status_code == 400
 
 
-def test_sso_관리자_판정은_현재_이름_하드코딩(client, db, mock_sso):
-    """
-    현재 동작 고정: routers/auth.py에서 name == "이영배"이면 admin이 된다.
-    Phase 4에서 환경변수 기반으로 교체하면 이 테스트를 함께 수정한다.
-    """
-    mock_sso(sub="sso-uuid-admin", email="lyb77@bit.kr", name="이영배")
+def test_sso_관리자는_ADMIN_EMAILS_기준으로_판정(client, db, mock_sso):
+    mock_sso(sub="sso-uuid-admin", email="boss@bit.kr", name="이영배")
     res = _sso_login(client)
     assert res.status_code == 200
     assert res.json()["role"] == "admin"
 
 
-def test_sso_이름이_다르면_일반사용자(client, mock_sso):
+def test_sso_이메일_대소문자_무시(client, mock_sso):
+    mock_sso(sub="sso-uuid-admin2", email="BOSS@BIT.KR", name="이영배")
+    assert _sso_login(client).json()["role"] == "admin"
+
+
+def test_sso_목록에_없는_이메일은_일반사용자(client, mock_sso):
     mock_sso(sub="sso-uuid-2", email="other@bit.kr", name="박사원")
     assert _sso_login(client).json()["role"] == "user"
+
+
+def test_sso_동명이인은_관리자가_되지_않음(client, db, mock_sso, make_user):
+    """
+    이전에는 name == "이영배"로 판정해, 같은 이름의 신규 SSO 사용자가
+    관리자 권한을 얻었다. 이메일 기준으로 바뀌어 차단된다.
+    """
+    make_user(name="이영배", role="admin", sub="sso-uuid-real-admin", email="boss@bit.kr")
+
+    mock_sso(sub="sso-uuid-impostor", email="impostor@bit.kr", name="이영배")
+    res = _sso_login(client)
+    assert res.status_code == 200
+    assert res.json()["role"] == "user"
+
+    impostor = db.query(models.User).filter(models.User.sub == "sso-uuid-impostor").one()
+    assert impostor.role == "user"
+
+
+def test_sso_이메일이_없으면_일반사용자(client, mock_sso):
+    """SSO payload에 email이 없는 경우에도 안전하게 user로 처리된다."""
+    mock_sso(sub="sso-uuid-noemail", email=None, name="이영배")
+    assert _sso_login(client).json()["role"] == "user"
+
+
+def test_sso_기존사용자를_관리자로_승격(client, db, mock_sso, make_user):
+    user = make_user(name="승진자", role="user", sub="sso-uuid-promote", email="boss@bit.kr")
+    mock_sso(sub="sso-uuid-promote", email="boss@bit.kr", name="승진자")
+
+    assert _sso_login(client).json()["role"] == "admin"
+    db.refresh(user)
+    assert user.role == "admin"
+
+
+def test_sso_기존_관리자를_강등하지_않음(client, db, mock_sso, make_user):
+    """
+    ADMIN_EMAILS에 없어도 DB의 admin 권한은 유지된다.
+    설정 실수로 관리자 접근을 잃지 않게 하는 안전장치다.
+    """
+    admin = make_user(name="수동관리자", role="admin", sub="sso-uuid-manual", email="manual@bit.kr")
+    mock_sso(sub="sso-uuid-manual", email="manual@bit.kr", name="수동관리자")
+
+    assert _sso_login(client).json()["role"] == "admin"
+    db.refresh(admin)
+    assert admin.role == "admin"
 
 
 def test_토큰으로_내정보_조회(client, make_user, auth_headers):
