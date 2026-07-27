@@ -2,45 +2,45 @@
 
 상세 근거는 [villa-feature-plan.md](villa-feature-plan.md), 작업 중 판단은 [villa-context-notes.md](villa-context-notes.md) 참조.
 
-**진행 상태: 기획 완료. 개발 미착수 (사용자 승인 대기).**
+**진행 상태: Phase 1~2 완료 및 커밋. 테스트 149개 통과. Phase 3(사용자 UI) 대기.**
 
 ---
 
-## Phase 1 — 스키마 및 기반
+## Phase 1 — 스키마 및 기반 ✅ 완료
 
-- [ ] `models.py` — `VillaReservation` 추가 (Date 타입, `created_at`은 KST naive)
-- [ ] `models.py` — `VillaReservation`에 취소 승인 컬럼 4개 (`cancel_requested_at`, `cancel_reason`, `canceled_at`, `canceled_by`)
-- [ ] `models.py` — `VillaBookingRound` 추가
-- [ ] `schemas.py` — 신청/조회/추가입력/취소요청 Pydantic 스키마
-- [ ] `initial_data.py` — 청평별장·동비재 `type='villa'`, **capacity 20** 시드 추가
-- [ ] `initial_data.py` — `villa_settings` 기본값 시드 (`peak_months: [7,8]`, `peak_max_nights: 2`)
-- [ ] `migrate_villa.py` — 운영 DB 마이그레이션 스크립트 (`remote_config` 사용)
-- [ ] `conftest.py` — `facilities` 픽스처에 villa 2개 추가
-- [ ] ✅ 검증: 기존 93개 테스트 여전히 통과 (회귀 없음)
-- [ ] 📦 커밋: `feat: 비트별장 예약 스키마 및 시드 추가`
+- [x] `models.py` — `VillaReservation` 추가 (Date 타입, `created_at`은 KST naive)
+- [x] `models.py` — `VillaReservation`에 취소 승인 컬럼 4개 (`cancel_requested_at`, `cancel_reason`, `canceled_at`, `canceled_by`)
+- [x] `models.py` — `VillaBookingRound` 추가
+- [x] `schemas.py` — 신청/조회/추가입력/취소요청 Pydantic 스키마
+- [x] `initial_data.py` — 청평별장·동비재 `type='villa'`, **capacity 20** 시드 추가
+- [x] `initial_data.py` — `villa_settings` 기본값 시드 (`peak_months: [7,8]`, `peak_max_nights: 2`)
+- [x] `migrate_villa.py` — 운영 DB 마이그레이션 스크립트 (`remote_config` 사용)
+- [x] `conftest.py` — `facilities` 픽스처에 villa 2개 추가
+- [x] ✅ 검증: 기존 93개 테스트 여전히 통과 (회귀 없음)
+- [x] 📦 커밋: `feat: 비트별장 예약 스키마 및 시드 추가`
 
-## Phase 2 — 신청·조회 API
+## Phase 2 — 신청·조회 API ✅ 완료
 
-- [ ] `routers/villa.py` 신규 — 라우터 등록 (`main.py`)
-- [ ] 회차 산출 로직 — 대상월 2개월 전 1일~말일
-- [ ] 겹침 판정 헬퍼 — `a.start < b.end and a.end > b.start` (체크아웃 배타)
-- [ ] `GET /api/villa/facilities` — 별장 목록 + 설정
-- [ ] `GET /api/villa/current-round` — 현재 접수중 회차
-- [ ] `GET /api/villa/calendar` — 확정/신청중/내신청 구분 반환
-- [ ] `POST /api/villa/apply` — 중복 신청 허용, 접수 기간 검증
-- [ ] `GET /api/villa/my` — 내 신청 목록
-- [ ] `POST /api/villa/cancel/{id}` — `applied` 상태만 즉시 취소
-- [ ] `POST /api/villa/cancel-request/{id}` — `confirmed` 상태 취소 요청 + 관리자 Slack 알림
-- [ ] 인원 상한 검증 (`capacity` 20명)
-- [ ] 성수기 연박 제한 — **기간이 7·8월을 하루라도 포함하면 2박까지**
-- [ ] 월말 걸침 연박 — 체크인 날짜 기준으로 회차 판정
-- [ ] ✅ 테스트: 겹침 경계 (`8/1~8/3` vs `8/3~8/5` 비충돌)
-- [ ] ✅ 테스트: 같은 기간 중복 신청 허용
-- [ ] ✅ 테스트: 접수 기간 외 정규신청 거부
-- [ ] ✅ 테스트: 성수기 판정 — `7/10~7/12` 허용 / `7/10~7/13` 거부 / `6/30~7/3` 거부 / `6/25~6/28` 허용 / `9/1~9/8` 허용
-- [ ] ✅ 테스트: 인원 초과(21명) 거부, 과거 날짜 거부
-- [ ] ✅ 테스트: `confirmed` 예약에 즉시 취소 시도 거부 (요청 경로로만 가능)
-- [ ] 📦 커밋: `feat: 비트별장 신청/조회 API 추가`
+- [x] `routers/villa.py` 신규 — 라우터 등록 (`main.py`)
+- [x] 회차 산출 로직 — 대상월 2개월 전 1일~말일
+- [x] 겹침 판정 헬퍼 — `a.start < b.end and a.end > b.start` (체크아웃 배타)
+- [x] `GET /api/villa/facilities` — 별장 목록 + 설정
+- [x] `GET /api/villa/current-round` — 현재 접수중 회차
+- [x] `GET /api/villa/calendar` — 확정/신청중/내신청 구분 반환
+- [x] `POST /api/villa/apply` — 중복 신청 허용, 접수 기간 검증
+- [x] `GET /api/villa/my` — 내 신청 목록
+- [x] `POST /api/villa/cancel/{id}` — `applied` 상태만 즉시 취소
+- [x] `POST /api/villa/cancel-request/{id}` — `confirmed` 상태 취소 요청 + 관리자 Slack 알림
+- [x] 인원 상한 검증 (`capacity` 20명)
+- [x] 성수기 연박 제한 — **기간이 7·8월을 하루라도 포함하면 2박까지**
+- [x] 월말 걸침 연박 — 체크인 날짜 기준으로 회차 판정
+- [x] ✅ 테스트: 겹침 경계 (`8/1~8/3` vs `8/3~8/5` 비충돌)
+- [x] ✅ 테스트: 같은 기간 중복 신청 허용
+- [x] ✅ 테스트: 접수 기간 외 정규신청 거부
+- [x] ✅ 테스트: 성수기 판정 — `7/10~7/12` 허용 / `7/10~7/13` 거부 / `6/30~7/3` 거부 / `6/25~6/28` 허용 / `9/1~9/8` 허용
+- [x] ✅ 테스트: 인원 초과(21명) 거부, 과거 날짜 거부
+- [x] ✅ 테스트: `confirmed` 예약에 즉시 취소 시도 거부 (요청 경로로만 가능)
+- [x] 📦 커밋: `feat: 비트별장 신청/조회 API 추가`
 
 ## Phase 3 — 사용자 UI
 
@@ -52,7 +52,7 @@
 - [ ] "내 신청 현황" 섹션 — 상태 배지, 추가입력 필요 표시
 - [ ] `app/page.tsx` — 스크린골프 옆에 "비트별장" 카드 추가
 - [ ] `app/page.tsx` — 이번 달 헬스장 출석을 골프 아래로 이동
-- [ ] ⚠️ 이번 달 출석 중복 표시 정리 (열린 항목 2 확정 후)
+- [ ] 상단 요약의 출석 수치는 **그대로 유지** (중복 표시 확정)
 - [ ] ✅ 검증: `npx tsc --noEmit` 통과
 - [ ] ✅ 검증: 로컬에서 달력·신청 플로우 화면 확인
 - [ ] 📦 커밋: `feat: 비트별장 예약 달력 UI 및 메뉴 배치`
@@ -149,11 +149,11 @@
 
 ## 남은 열린 항목 (기본안 있음, 이견 없으면 진행)
 
-[villa-feature-plan.md](villa-feature-plan.md) 13절 참조. Phase 3 착수 전 1번만 답이 필요하다.
+[villa-feature-plan.md](villa-feature-plan.md) 13절 참조. Phase 3에는 영향이 없다. 아래 항목은 해당 Phase 착수 전까지 확인하면 된다.
 
-1. [ ] 선착순 즉시 확정 (기본안 승인 여부)
-2. [ ] 성인+아동 합계 불일치 처리 (기본안 승인 여부)
-3. [ ] 통보일 미확정 건 처리 (기본안 승인 여부)
-4. [ ] 취소 사유 필수 입력 여부 (기본안은 선택)
+1. [ ] 선착순 즉시 확정 (Phase 7) — 기본안은 즉시 확정
+2. [ ] 성인+아동 합계 불일치 처리 (Phase 6) — 기본안은 경고만
+3. [ ] 통보일 미확정 건 처리 (Phase 7) — 기본안은 통보 보류 + 관리자 경고
+4. [x] 취소 사유 필수 입력 여부 — **선택 입력으로 구현** (Phase 2 완료)
 
 **해결:** 이번 달 출석 중복 표시는 **그대로 유지**한다(사용자 확정). 상단 요약과 카드 양쪽에 둔다.
