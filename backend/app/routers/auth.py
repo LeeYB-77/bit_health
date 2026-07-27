@@ -108,7 +108,6 @@ async def sso_login(req: SSOLoginRequest, db: Session = Depends(database.get_db)
         user.role = "admin"
         db.commit()
 
-
     access_token_expires = timedelta(minutes=auth_utils.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = auth_utils.create_access_token(
         data={"sub": str(user.id), "name": user.name, "role": user.role}, expires_delta=access_token_expires
