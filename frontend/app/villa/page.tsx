@@ -90,7 +90,7 @@ export default function VillaPage() {
     // 신청 모달
     const [applyOpen, setApplyOpen] = useState(false);
     const [form, setForm] = useState({
-        start_date: '', end_date: '', checkin_time: '15:00', checkout_time: '11:00', participant_count: 4,
+        start_date: '', end_date: '', checkin_time: '14:00', checkout_time: '12:00', participant_count: 4,
     });
 
     // 취소 요청 모달
@@ -175,8 +175,8 @@ export default function VillaPage() {
         setForm({
             start_date: dayISO,
             end_date: toISO(addDays(parseISO(dayISO), 1)),
-            checkin_time: selectedVilla?.default_checkin_time || '15:00',
-            checkout_time: selectedVilla?.default_checkout_time || '11:00',
+            checkin_time: selectedVilla?.default_checkin_time || '14:00',
+            checkout_time: selectedVilla?.default_checkout_time || '12:00',
             participant_count: 4,
         });
         setMessage(null);
@@ -207,14 +207,19 @@ export default function VillaPage() {
         if (!selectedVillaId || formError) return;
         setSubmitting(true);
         try {
-            await applyVilla({ facility_id: selectedVillaId, ...form });
+            const result = await applyVilla({ facility_id: selectedVillaId, ...form });
             setApplyOpen(false);
-            setMessage({
-                type: 'ok',
-                text: bookingMode === 'open'
-                    ? '선착순 예약이 확정되었습니다. 확정 안내와 추가입력 링크를 보내드렸습니다.'
-                    : '예약을 신청했습니다. 확정 결과는 마감일에 안내됩니다.',
-            });
+
+            const baseText = bookingMode === 'open'
+                ? '선착순 예약이 확정되었습니다. 확정 안내와 추가입력 링크를 보내드렸습니다.'
+                : '예약을 신청했습니다. 확정 결과는 마감일에 안내됩니다.';
+            // 앞뒤로 붙는 예약이 있으면 정규 시간이 강제된다. 확정 즉시(선착순) 알 수 있으므로 덧붙인다.
+            const boundaryNote = [
+                result.checkin_time_forced && `입실은 앞 예약자의 퇴실과 겹쳐 정규 시간(${result.checkin_time})으로 지정됐습니다.`,
+                result.checkout_time_forced && `퇴실은 뒤 예약자의 입실과 겹쳐 정규 시간(${result.checkout_time})으로 지정됐습니다.`,
+            ].filter(Boolean).join(' ');
+
+            setMessage({ type: 'ok', text: boundaryNote ? `${baseText} ${boundaryNote}` : baseText });
             await reload();
         } catch (e) {
             setMessage({ type: 'err', text: e instanceof Error ? e.message : '신청에 실패했습니다.' });
@@ -506,9 +511,31 @@ export default function VillaPage() {
                                                     <p className="text-xs text-gray-600 mt-1.5">
                                                         {r.start_date} ~ {r.end_date} ({r.nights}박)
                                                     </p>
-                                                    <p className="text-xs text-gray-400 mt-0.5">
-                                                        {r.checkin_time} 입실 · {r.checkout_time} 퇴실 · {r.participant_count}명
+                                                    <p className="text-xs text-gray-400 mt-0.5 flex items-center flex-wrap gap-x-1">
+                                                        <span>
+                                                            {r.checkin_time} 입실
+                                                            {r.checkin_time_forced && (
+                                                                <span className="ml-1 text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
+                                                                    정규시간
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                        <span>·</span>
+                                                        <span>
+                                                            {r.checkout_time} 퇴실
+                                                            {r.checkout_time_forced && (
+                                                                <span className="ml-1 text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
+                                                                    정규시간
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                        <span>· {r.participant_count}명</span>
                                                     </p>
+                                                    {(r.checkin_time_forced || r.checkout_time_forced) && (
+                                                        <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-2 py-1 mt-1.5">
+                                                            앞뒤로 붙는 예약이 있어 위 시간(정규시간 표시)을 반드시 지켜주셔야 합니다.
+                                                        </p>
+                                                    )}
                                                     {r.status === 'cancel_requested' && (
                                                         <p className="text-[11px] text-orange-600 mt-1.5">
                                                             관리자 승인 대기 중입니다.

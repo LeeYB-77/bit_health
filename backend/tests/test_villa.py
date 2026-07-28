@@ -109,7 +109,8 @@ def test_별장_목록_조회(client, facilities, make_user, auth_headers):
     body = res.json()
     assert [v["name"] for v in body] == ["청평별장", "동비재"]
     assert all(v["capacity"] == 20 for v in body)
-    assert body[0]["default_checkin_time"] == "15:00"
+    assert body[0]["default_checkin_time"] == "14:00"
+    assert body[0]["default_checkout_time"] == "12:00"
 
 
 def test_현재_회차는_2개월_뒤_대상월(client, facilities, make_user, auth_headers):

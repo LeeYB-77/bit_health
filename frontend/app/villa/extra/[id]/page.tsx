@@ -132,6 +132,13 @@ export default function VillaExtraInfoPage() {
                             <p className="text-xs text-gray-400 mt-0.5">
                                 {info.checkin_time} 입실 · {info.checkout_time} 퇴실 · 신청 인원 {info.participant_count}명
                             </p>
+                            {(info.checkin_time_forced || info.checkout_time_forced) && (
+                                <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5 mt-2">
+                                    앞뒤로 붙는 예약이 있어 {info.checkin_time_forced && info.checkout_time_forced
+                                        ? '입실·퇴실 시간 모두'
+                                        : info.checkin_time_forced ? '입실 시간이' : '퇴실 시간이'} 정규 시간으로 지정되었습니다. 위 시간을 반드시 지켜주세요.
+                                </p>
+                            )}
                         </section>
 
                         {saved && (

@@ -95,8 +95,14 @@ class VillaReservation(Base):
 
     start_date = Column(Date, index=True)   # 체크인
     end_date = Column(Date, index=True)     # 체크아웃 (배타적)
-    checkin_time = Column(String)           # "15:00" 예상 입실
-    checkout_time = Column(String)          # "11:00" 예상 퇴실
+    # checkin_time/checkout_time은 "실제 적용되는" 시간이다. 앞뒤로 붙는 예약이 없으면
+    # requested_*와 같고, 붙는 예약이 있으면 정규 시간(villa_settings)으로 강제된다.
+    checkin_time = Column(String)           # "15:00" 실제 적용 입실 시간
+    checkout_time = Column(String)          # "11:00" 실제 적용 퇴실 시간
+    requested_checkin_time = Column(String)   # 신청 시 입력한 입실 시간 (강제 해제 시 복귀 기준)
+    requested_checkout_time = Column(String)  # 신청 시 입력한 퇴실 시간
+    checkin_time_forced = Column(Boolean, default=False)   # 앞 예약의 퇴실과 겹쳐 정규 시간 강제 중
+    checkout_time_forced = Column(Boolean, default=False)  # 뒤 예약의 입실과 겹쳐 정규 시간 강제 중
     participant_count = Column(Integer, default=1)
 
     # applied, confirmed, cancel_requested, canceled, rejected

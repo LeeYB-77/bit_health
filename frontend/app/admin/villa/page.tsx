@@ -17,6 +17,8 @@ interface Application {
     nights: number;
     checkin_time: string | null;
     checkout_time: string | null;
+    checkin_time_forced: boolean;
+    checkout_time_forced: boolean;
     participant_count: number;
     status: string;
     created_at: string;
@@ -306,7 +308,12 @@ export default function AdminVillaPage() {
                                         </div>
                                         <p className="text-sm text-gray-600 mt-1">
                                             {a.start_date} ~ {a.end_date} ({a.nights}박) · {a.participant_count}명
-                                            · {a.checkin_time} 입실 / {a.checkout_time} 퇴실
+                                            · {a.checkin_time} 입실{a.checkin_time_forced && (
+                                                <span className="ml-1 text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">정규</span>
+                                            )}
+                                            {' '}/ {a.checkout_time} 퇴실{a.checkout_time_forced && (
+                                                <span className="ml-1 text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">정규</span>
+                                            )}
                                         </p>
                                         <p className="text-xs text-gray-400 mt-0.5">
                                             신청 {a.created_at ? new Date(a.created_at).toLocaleString('ko-KR') : '-'}
@@ -351,6 +358,14 @@ export default function AdminVillaPage() {
                                     </p>
                                     <p className="text-sm text-gray-600 mt-0.5">
                                         {c.facility_name} · {c.start_date} ~ {c.end_date} ({c.nights}박) · {c.participant_count}명
+                                    </p>
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                        {c.checkin_time} 입실{c.checkin_time_forced && (
+                                            <span className="ml-1 text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">정규</span>
+                                        )}
+                                        {' '}/ {c.checkout_time} 퇴실{c.checkout_time_forced && (
+                                            <span className="ml-1 text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">정규</span>
+                                        )}
                                     </p>
                                 </div>
                                 <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${

@@ -26,12 +26,14 @@ BLOCKING_STATUSES = ("confirmed", "cancel_requested")
 VISIBLE_STATUSES = ("applied",) + BLOCKING_STATUSES
 
 # 성수기 규칙은 해마다 바뀔 수 있어 하드코딩하지 않고 SystemSetting으로 둔다.
+# default_checkin_time/default_checkout_time은 이중 역할이다 — 겹치는 예약이
+# 없을 때의 기본 제안 시간이면서, 앞뒤로 붙는 예약이 있을 때 강제되는 "정규 시간"이다.
 DEFAULT_VILLA_SETTINGS = {
     "peak_months": [7, 8],
     "peak_max_nights": 2,
     "default_max_nights": None,
-    "default_checkin_time": "15:00",
-    "default_checkout_time": "11:00",
+    "default_checkin_time": "14:00",
+    "default_checkout_time": "12:00",
     "villas": {
         "청평별장": {"address": "", "notice": ""},
         "동비재": {"address": "", "notice": ""},
@@ -106,6 +108,108 @@ def overlapping_query(db: Session, facility_id: int, start_date: date, end_date:
         models.VillaReservation.start_date < end_date,
         models.VillaReservation.end_date > start_date,
     )
+
+
+# --- 입퇴실 시간 동기화 ---
+# 같은 날 한쪽이 퇴실하고 다른 쪽이 입실하는 건 허용한다(체크아웃 배타 규칙,
+# overlapping_query 참조). 다만 그 경계일에는 정리 시간을 보장하기 위해
+# 양쪽 모두 정규 입퇴실 시간을 지켜야 한다. 겹치는 예약이 없는 날짜는
+# 신청 시 입력한 시간을 그대로 쓸 수 있다.
+
+def _find_adjacent(db: Session, facility_id: int, boundary_date: date, exclude_id: int, side: str):
+    """
+    side='checkin' — boundary_date에 퇴실하는 다른 확정 예약(내가 그날 입실한다는 뜻)
+    side='checkout' — boundary_date에 입실하는 다른 확정 예약(내가 그날 퇴실한다는 뜻)
+    """
+    q = db.query(models.VillaReservation).filter(
+        models.VillaReservation.facility_id == facility_id,
+        models.VillaReservation.status.in_(BLOCKING_STATUSES),
+        models.VillaReservation.id != exclude_id,
+    )
+    if side == "checkin":
+        q = q.filter(models.VillaReservation.end_date == boundary_date)
+    else:
+        q = q.filter(models.VillaReservation.start_date == boundary_date)
+    return q.first()
+
+
+def _apply_boundary_side(reservation, side: str, forced: bool, standard_checkin: str, standard_checkout: str) -> bool:
+    """
+    한쪽 경계의 강제 여부를 반영한다. 방금 강제로 전환됐을 때만 True를 반환한다
+    (알림은 '강제가 새로 걸렸을 때'만 보내면 되고, 해제될 때는 보내지 않는다).
+    """
+    field = f"{side}_time_forced"
+    was_forced = getattr(reservation, field)
+    if side == "checkin":
+        reservation.checkin_time = standard_checkin if forced else reservation.requested_checkin_time
+        reservation.checkin_time_forced = forced
+    else:
+        reservation.checkout_time = standard_checkout if forced else reservation.requested_checkout_time
+        reservation.checkout_time_forced = forced
+    return forced and not was_forced
+
+
+def sync_boundary_times(db: Session, reservation) -> list:
+    """
+    reservation의 체크인/체크아웃 경계에 인접한 확정 예약이 있는지 확인해 정규 시간
+    강제 여부를 갱신한다. 인접한 상대방의 반대편 경계도 함께 갱신된다(둘 다 같은 날을
+    나눠 쓰므로 한쪽만 정규 시간을 지키는 건 의미가 없다).
+
+    반환값: 이번 호출로 새로 강제 전환된 (reservation, side) 목록. 통보 대상 판단에 쓴다.
+    """
+    settings = get_villa_settings_data(db)
+    standard_checkin = settings.get("default_checkin_time") or "14:00"
+    standard_checkout = settings.get("default_checkout_time") or "12:00"
+    newly_forced = []
+
+    neighbor_out = _find_adjacent(db, reservation.facility_id, reservation.start_date, reservation.id, "checkin")
+    if _apply_boundary_side(reservation, "checkin", neighbor_out is not None, standard_checkin, standard_checkout):
+        newly_forced.append((reservation, "checkin"))
+    if neighbor_out is not None:
+        if _apply_boundary_side(neighbor_out, "checkout", True, standard_checkin, standard_checkout):
+            newly_forced.append((neighbor_out, "checkout"))
+
+    neighbor_in = _find_adjacent(db, reservation.facility_id, reservation.end_date, reservation.id, "checkout")
+    if _apply_boundary_side(reservation, "checkout", neighbor_in is not None, standard_checkin, standard_checkout):
+        newly_forced.append((reservation, "checkout"))
+    if neighbor_in is not None:
+        if _apply_boundary_side(neighbor_in, "checkin", True, standard_checkin, standard_checkout):
+            newly_forced.append((neighbor_in, "checkin"))
+
+    return newly_forced
+
+
+def release_boundary_times(db: Session, released_reservation) -> None:
+    """
+    예약이 취소되어 더 이상 기간을 점유하지 않게 됐을 때, 인접했던 이웃들의 강제
+    여부를 재평가한다. 이웃에게 다른 인접 예약이 없다면 신청 시간으로 되돌아간다.
+    해제는 통보하지 않는다(요청 범위: 강제가 걸릴 때만 알린다).
+    """
+    neighbor_out = _find_adjacent(
+        db, released_reservation.facility_id, released_reservation.start_date, released_reservation.id, "checkin"
+    )
+    if neighbor_out is not None:
+        sync_boundary_times(db, neighbor_out)
+
+    neighbor_in = _find_adjacent(
+        db, released_reservation.facility_id, released_reservation.end_date, released_reservation.id, "checkout"
+    )
+    if neighbor_in is not None:
+        sync_boundary_times(db, neighbor_in)
+
+
+def _notify_newly_forced(db: Session, reservation, newly_forced: list) -> None:
+    """
+    newly_forced 중 이 reservation 자신의 항목은 건너뛴다 — 확정/통보 메시지에 이미
+    강제 여부가 반영되어 별도 발송이 불필요하다. 인접한 상대방에게만 즉시 알린다.
+    """
+    for target, side in newly_forced:
+        if target.id == reservation.id:
+            continue
+        try:
+            villa_notify.notify_boundary_time_forced(db, target, side)
+        except Exception as e:
+            print(f"Failed to notify boundary time forced for reservation {target.id}: {e}")
 
 
 def _get_villa_or_404(db: Session, facility_id: int) -> models.Facility:
@@ -188,8 +292,8 @@ def list_villas(
             "capacity": v.capacity,
             "address": (per_villa.get(v.name) or {}).get("address", ""),
             "notice": (per_villa.get(v.name) or {}).get("notice", ""),
-            "default_checkin_time": settings.get("default_checkin_time", "15:00"),
-            "default_checkout_time": settings.get("default_checkout_time", "11:00"),
+            "default_checkin_time": settings.get("default_checkin_time", "14:00"),
+            "default_checkout_time": settings.get("default_checkout_time", "12:00"),
         }
         for v in villas
     ]
@@ -299,6 +403,8 @@ def get_my_reservations(
             "nights": nights_of(r.start_date, r.end_date),
             "checkin_time": r.checkin_time,
             "checkout_time": r.checkout_time,
+            "checkin_time_forced": r.checkin_time_forced,
+            "checkout_time_forced": r.checkout_time_forced,
             "participant_count": r.participant_count,
             "status": r.status,
             "booking_type": r.booking_type,
@@ -377,8 +483,12 @@ def apply_villa(
         facility_id=villa.id,
         start_date=start,
         end_date=end,
+        # 초기값은 신청 시간 그대로다. 확정되는 순간(아래) 인접 예약이 있으면
+        # sync_boundary_times가 정규 시간으로 덮어쓴다.
         checkin_time=payload.checkin_time,
         checkout_time=payload.checkout_time,
+        requested_checkin_time=payload.checkin_time,
+        requested_checkout_time=payload.checkout_time,
         participant_count=payload.participant_count,
         status="confirmed" if is_open_booking else "applied",
         booking_type="open" if is_open_booking else "regular",
@@ -393,7 +503,12 @@ def apply_villa(
     db.refresh(reservation)
 
     if is_open_booking:
-        villa_notify.notify_confirmed(db, reservation)
+        # applied 상태(정규예약 대기)는 아직 확정이 아니므로 동기화하지 않는다.
+        # 선착순은 생성 즉시 확정이라 여기서 인접 여부를 확정해야 한다.
+        newly_forced = sync_boundary_times(db, reservation)
+        db.commit()
+        villa_notify.notify_confirmed(db, reservation)  # 강제 여부가 메시지에 반영된다
+        _notify_newly_forced(db, reservation, newly_forced)
 
     return reservation
 
@@ -485,6 +600,8 @@ def _extra_info_payload(reservation):
         "nights": nights_of(reservation.start_date, reservation.end_date),
         "checkin_time": reservation.checkin_time,
         "checkout_time": reservation.checkout_time,
+        "checkin_time_forced": reservation.checkin_time_forced,
+        "checkout_time_forced": reservation.checkout_time_forced,
         "participant_count": reservation.participant_count,
         "status": reservation.status,
         "vehicle_count": reservation.vehicle_count,
@@ -630,6 +747,8 @@ def _serialize_application(r, usage_counts):
         "nights": nights_of(r.start_date, r.end_date),
         "checkin_time": r.checkin_time,
         "checkout_time": r.checkout_time,
+        "checkin_time_forced": r.checkin_time_forced,
+        "checkout_time_forced": r.checkout_time_forced,
         "participant_count": r.participant_count,
         "status": r.status,
         "booking_type": r.booking_type,
@@ -806,6 +925,14 @@ def confirm_application(
         other.status = "rejected"
 
     db.commit()
+
+    # 방금 확정으로 이 예약이 기간을 점유하게 됐으니 인접 예약과의 정규 시간을 동기화한다.
+    # 이 예약 자신의 강제 여부는 나중에 admin/notify가 보낼 확정 메시지에 반영되므로
+    # 여기서는 이웃에게만 즉시 알린다.
+    newly_forced = sync_boundary_times(db, reservation)
+    db.commit()
+    _notify_newly_forced(db, reservation, newly_forced)
+
     return {
         "message": "예약을 확정했습니다.",
         "rejected_count": len(others),
@@ -860,6 +987,10 @@ def approve_cancel(
     reservation.status = "canceled"
     reservation.canceled_at = datetime.now()
     reservation.canceled_by = current_user.id
+    db.commit()
+
+    # 이 예약이 빠지면서 인접 이웃이 정규 시간 강제에서 풀릴 수 있다(다른 인접이 없다면).
+    release_boundary_times(db, reservation)
     db.commit()
 
     villa_notify.notify_cancel_approved(db, reservation)

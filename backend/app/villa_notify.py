@@ -48,30 +48,86 @@ def _dispatch(db: Session, user, subject: str, slack_message: str, mail_body: st
     return slack_sent or mail_sent
 
 
+def _boundary_notice_lines(reservation) -> list:
+    """
+    앞뒤로 붙는 예약이 있어 정규 시간이 강제된 경우의 안내 문구.
+    겹치는 예약이 없는 경계는 신청한 시간을 그대로 쓰므로 별도 안내가 없다.
+    """
+    lines = []
+    if reservation.checkin_time_forced:
+        lines.append(
+            f"⚠️ 입실일에 다른 예약자의 퇴실이 겹쳐, 정리 시간을 위해 "
+            f"입실 시간을 정규 시간인 {reservation.checkin_time}으로 지켜주셔야 합니다."
+        )
+    if reservation.checkout_time_forced:
+        lines.append(
+            f"⚠️ 퇴실일에 다른 예약자의 입실이 겹쳐, 정리 시간을 위해 "
+            f"퇴실 시간을 정규 시간인 {reservation.checkout_time}으로 지켜주셔야 합니다."
+        )
+    return lines
+
+
 def notify_confirmed(db: Session, reservation) -> bool:
     """확정 통보. 차량·이용구성을 입력할 링크를 함께 보낸다."""
     villa = _villa_name(reservation)
     period = _period(reservation)
     link = extra_info_url(reservation.id)
+    boundary_lines = _boundary_notice_lines(reservation)
+    boundary_block = ("\n" + "\n".join(boundary_lines) + "\n") if boundary_lines else ""
 
     slack_message = (
         f"🏡 *[비트별장 예약 확정 안내]*\n\n"
         f"*{villa}* 예약이 확정되었습니다.\n"
         f"• *이용 기간*: {period}\n"
         f"• *입실/퇴실*: {reservation.checkin_time} / {reservation.checkout_time}\n"
-        f"• *사용 인원*: {reservation.participant_count}명\n\n"
+        f"• *사용 인원*: {reservation.participant_count}명\n"
+        f"{boundary_block}\n"
         f"아래 링크에서 차량 정보와 이용 구성을 입력해 주세요.\n{link}"
     )
     mail_body = (
         f"{villa} 예약이 확정되었습니다.\n\n"
         f"- 이용 기간: {period}\n"
         f"- 입실/퇴실: {reservation.checkin_time} / {reservation.checkout_time}\n"
-        f"- 사용 인원: {reservation.participant_count}명\n\n"
+        f"- 사용 인원: {reservation.participant_count}명\n"
+        f"{boundary_block}\n"
         f"아래 링크에서 차량 정보와 이용 구성(성인/아동)을 입력해 주세요.\n"
         f"{link}\n\n"
         f"링크 접속에는 사내 SSO 로그인이 필요하며, 본인 예약만 조회됩니다.\n"
     )
     return _dispatch(db, reservation.user, f"[BIT] {villa} 예약이 확정되었습니다", slack_message, mail_body)
+
+
+def notify_boundary_time_forced(db: Session, reservation, side: str) -> bool:
+    """
+    이미 확정되어 있던 예약의 경계에 새로운 예약이 붙어, 정규 시간 준수가 새로
+    필요해졌을 때 보내는 알림. side='checkin'이면 입실일 겹침, 'checkout'이면 퇴실일 겹침.
+    """
+    villa = _villa_name(reservation)
+    period = _period(reservation)
+
+    if side == "checkin":
+        title = "입실 시간 정규화 안내"
+        detail = (
+            f"입실일({reservation.start_date})에 다른 예약자의 퇴실 일정이 겹치게 되어, "
+            f"정리 시간을 위해 입실 시간을 정규 시간인 *{reservation.checkin_time}*으로 지켜주셔야 합니다."
+        )
+    else:
+        title = "퇴실 시간 정규화 안내"
+        detail = (
+            f"퇴실일({reservation.end_date})에 다른 예약자의 입실 일정이 겹치게 되어, "
+            f"정리 시간을 위해 퇴실 시간을 정규 시간인 *{reservation.checkout_time}*으로 지켜주셔야 합니다."
+        )
+
+    slack_message = (
+        f"🕐 *[비트별장 {title}]*\n\n"
+        f"*{villa}* {period} 예약에 안내드립니다.\n"
+        f"{detail}"
+    )
+    mail_body = (
+        f"{villa} {period} 예약에 안내드립니다.\n\n"
+        f"{detail.replace('*', '')}\n"
+    )
+    return _dispatch(db, reservation.user, f"[BIT] {villa} {title}", slack_message, mail_body)
 
 
 def notify_rejected(db: Session, reservation) -> bool:

@@ -61,12 +61,25 @@ SQL_COMMANDS = [
         vehicle_numbers TEXT,
         adult_count INTEGER,
         child_count INTEGER,
-        extra_info_updated_at TIMESTAMP
+        extra_info_updated_at TIMESTAMP,
+        requested_checkin_time VARCHAR,
+        requested_checkout_time VARCHAR,
+        checkin_time_forced BOOLEAN DEFAULT FALSE,
+        checkout_time_forced BOOLEAN DEFAULT FALSE
     );
     """,
     "CREATE INDEX IF NOT EXISTS ix_villa_reservations_start_date ON villa_reservations (start_date);",
     "CREATE INDEX IF NOT EXISTS ix_villa_reservations_end_date ON villa_reservations (end_date);",
     "CREATE INDEX IF NOT EXISTS ix_villa_reservations_status ON villa_reservations (status);",
+
+    # 이미 테이블이 있는 환경을 위한 보강 (멱등) — 입퇴실 시간 정규화 기능
+    "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS requested_checkin_time VARCHAR;",
+    "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS requested_checkout_time VARCHAR;",
+    "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS checkin_time_forced BOOLEAN DEFAULT FALSE;",
+    "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS checkout_time_forced BOOLEAN DEFAULT FALSE;",
+    # 기존 행은 강제 이력이 없던 시절의 데이터이므로 신청 시간을 그대로 '요청 시간'으로 채운다.
+    "UPDATE villa_reservations SET requested_checkin_time = checkin_time WHERE requested_checkin_time IS NULL;",
+    "UPDATE villa_reservations SET requested_checkout_time = checkout_time WHERE requested_checkout_time IS NULL;",
 
     # 3. 별장 시설 시드 (정원 20명)
     """
@@ -80,11 +93,23 @@ SQL_COMMANDS = [
     WHERE NOT EXISTS (SELECT 1 FROM facilities WHERE name = '동비재');
     """,
 
-    # 4. villa_settings 기본값 시드
+    # 4. villa_settings 기본값 시드 (정규 입퇴실 시간: 입실 14:00 / 퇴실 12:00)
     """
     INSERT INTO system_settings (key, value)
-    SELECT 'villa_settings', '{"peak_months": [7, 8], "peak_max_nights": 2, "default_max_nights": null, "default_checkin_time": "15:00", "default_checkout_time": "11:00", "villas": {}}'
+    SELECT 'villa_settings', '{"peak_months": [7, 8], "peak_max_nights": 2, "default_max_nights": null, "default_checkin_time": "14:00", "default_checkout_time": "12:00", "villas": {}}'
     WHERE NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'villa_settings');
+    """,
+    # 이미 villa_settings가 있던 환경(예전 기본값 15:00/11:00)의 정규 시간을 정정한다.
+    # jsonb_set으로 두 키만 바꿔 villas별 주소/안내문 등 다른 값은 보존한다.
+    """
+    UPDATE system_settings
+    SET value = (
+        jsonb_set(
+            jsonb_set(value::jsonb, '{default_checkin_time}', '"14:00"'),
+            '{default_checkout_time}', '"12:00"'
+        )
+    )::text
+    WHERE key = 'villa_settings';
     """,
 ]
 

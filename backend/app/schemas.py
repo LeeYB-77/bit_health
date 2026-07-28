@@ -74,6 +74,10 @@ class VillaReservation(BaseModel):
     end_date: date
     checkin_time: Optional[str] = None
     checkout_time: Optional[str] = None
+    requested_checkin_time: Optional[str] = None
+    requested_checkout_time: Optional[str] = None
+    checkin_time_forced: bool = False
+    checkout_time_forced: bool = False
     participant_count: int
     status: str
     booking_type: str

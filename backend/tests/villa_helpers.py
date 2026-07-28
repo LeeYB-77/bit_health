@@ -29,14 +29,18 @@ def payload(facility_id, start, end, participant_count=4):
     }
 
 
-def seed(db, user, villa, start, end, status="applied", participant_count=4):
+def seed(db, user, villa, start, end, status="applied", participant_count=4,
+         checkin_time="15:00", checkout_time="11:00"):
     row = models.VillaReservation(
         user_id=user.id,
         facility_id=villa.id,
         start_date=start,
         end_date=end,
-        checkin_time="15:00",
-        checkout_time="11:00",
+        checkin_time=checkin_time,
+        checkout_time=checkout_time,
+        # 동기화 로직이 강제 해제 시 이 값으로 되돌리므로 항상 함께 채운다.
+        requested_checkin_time=checkin_time,
+        requested_checkout_time=checkout_time,
         participant_count=participant_count,
         status=status,
         booking_type="regular",

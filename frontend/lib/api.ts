@@ -209,6 +209,9 @@ export interface VillaMyReservation {
   nights: number;
   checkin_time: string | null;
   checkout_time: string | null;
+  // true면 앞뒤로 붙는 예약이 있어 정규 시간으로 강제 적용된 상태다.
+  checkin_time_forced: boolean;
+  checkout_time_forced: boolean;
   participant_count: number;
   status: VillaStatus;
   booking_type: string;
@@ -236,6 +239,16 @@ export const getMyVillaReservations = async (): Promise<VillaMyReservation[]> =>
   return fetcher('/api/villa/my');
 };
 
+export interface VillaApplyResult {
+  id: number;
+  status: VillaStatus;
+  booking_type: string;
+  checkin_time: string | null;
+  checkout_time: string | null;
+  checkin_time_forced: boolean;
+  checkout_time_forced: boolean;
+}
+
 export const applyVilla = async (data: {
   facility_id: number;
   start_date: string;
@@ -243,7 +256,7 @@ export const applyVilla = async (data: {
   checkin_time: string;
   checkout_time: string;
   participant_count: number;
-}) => {
+}): Promise<VillaApplyResult> => {
   return fetcher('/api/villa/apply', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -269,6 +282,8 @@ export interface VillaExtraInfo {
   nights: number;
   checkin_time: string | null;
   checkout_time: string | null;
+  checkin_time_forced: boolean;
+  checkout_time_forced: boolean;
   participant_count: number;
   status: VillaStatus;
   vehicle_count: number | null;
