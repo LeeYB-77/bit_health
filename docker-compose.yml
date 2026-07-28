@@ -38,6 +38,14 @@ services:
   frontend:
     build: ./frontend
     container_name: bit_health_frontend
+    # 로컬은 dev 서버로 띄운다. 운영 빌드(npm start)는 재빌드할 때마다 청크
+    # 해시가 바뀌어, 열려 있던 탭이 사라진 청크를 요청하며 클라이언트 예외가 난다.
+    # dev 모드에서는 코드 수정 후 `docker compose restart frontend`(약 20초)로
+    # 반영된다. 운영 빌드 재빌드(2~4분)보다 훨씬 빠르다.
+    # 참고: Windows 볼륨 마운트는 inotify를 전달하지 않아 핫리로드는 동작하지
+    # 않는다. WATCHPACK_POLLING과 webpack 모드까지 시도했으나 마찬가지였다.
+    # 운영 배포는 deploy_docker_compose.yml이 그대로 운영 빌드를 쓴다.
+    command: npx next dev -H 0.0.0.0 -p 3000
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -45,7 +53,9 @@ services:
     ports:
       - "3002:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://59.10.164.2:8002
+      # dev 모드는 이 값을 런타임에 읽는다. 운영 주소를 두면 로컬 화면이
+      # 운영 백엔드를 호출하게 되므로 반드시 로컬을 가리켜야 한다.
+      NEXT_PUBLIC_API_URL: http://localhost:8002
       TZ: Asia/Seoul
     depends_on:
       - backend
