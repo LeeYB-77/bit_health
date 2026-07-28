@@ -2,8 +2,9 @@
 // 메일(SMTP) 발송 계정 설정 화면. 비밀번호는 서버에서 암호화 저장되며 조회 시 마스킹된다.
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { API_URL } from '@/lib/api';
-import { AlertTriangle, Loader2, Mail, Save, Send, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Loader2, Mail, Save, Send, X } from 'lucide-react';
 
 interface SmtpSettings {
     host: string;
@@ -34,6 +35,7 @@ async function call(path: string, method: 'GET' | 'POST' = 'GET', body?: unknown
 }
 
 export default function AdminSmtpPage() {
+    const router = useRouter();
     const [form, setForm] = useState<SmtpSettings | null>(null);
     // 새로 입력한 비밀번호만 담는다. 비어 있으면 기존 값을 그대로 둔다.
     const [newPassword, setNewPassword] = useState('');
@@ -106,6 +108,12 @@ export default function AdminSmtpPage() {
     return (
         <div className="space-y-6 px-4 sm:px-0 max-w-2xl">
             <div className="flex items-center gap-2">
+                <button
+                    onClick={() => router.push('/admin')}
+                    className="p-2 -ml-2 rounded-full hover:bg-gray-100 transition-colors text-gray-500"
+                >
+                    <ArrowLeft size={20} />
+                </button>
                 <Mail size={22} className="text-blue-600" />
                 <h2 className="text-xl font-bold text-gray-900">메일(SMTP) 설정</h2>
                 {form.configured && (

@@ -2,8 +2,9 @@
 // 비트별장 관리자 화면. 중복 경합 신청을 나란히 비교해 확정하고, 취소 요청을 승인·반려한다.
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { API_URL } from '@/lib/api';
-import { AlertTriangle, Calendar, Check, Loader2, Send, Users, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Calendar, Check, Loader2, Send, Users, X } from 'lucide-react';
 
 interface Application {
     id: number;
@@ -84,6 +85,7 @@ const shiftMonth = (year: number, month: number, delta: number) => {
 };
 
 export default function AdminVillaPage() {
+    const router = useRouter();
     const [data, setData] = useState<ApplicationsResponse | null>(null);
     const [cancels, setCancels] = useState<CancelRequest[]>([]);
     const [view, setView] = useState<{ year: number; month: number } | null>(null);
@@ -131,7 +133,15 @@ export default function AdminVillaPage() {
     return (
         <div className="space-y-6 px-4 sm:px-0">
             <div className="flex items-center justify-between flex-wrap gap-3">
-                <h2 className="text-xl font-bold text-gray-900">비트별장 예약 관리</h2>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => router.push('/admin')}
+                        className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-500"
+                    >
+                        <ArrowLeft size={20} />
+                    </button>
+                    <h2 className="text-xl font-bold text-gray-900">비트별장 예약 관리</h2>
+                </div>
                 {view && (
                     <div className="flex items-center gap-2">
                         <button
