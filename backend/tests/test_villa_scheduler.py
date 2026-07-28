@@ -47,6 +47,25 @@ def _admin(make_user):
     return make_user(role="admin", email="admin@bit.kr")
 
 
+@pytest.fixture
+def isolate_current_round(db):
+    """
+    스케줄러는 실행할 때마다 현재 대상월 회차를 자동 생성한다.
+    오늘이 월말에 가까우면 그 회차가 마감 임박 리마인더를 발생시켜,
+    알림 건수를 세는 테스트가 '오늘이 며칠이냐'에 따라 흔들린다.
+    (실제로 7/27에는 통과하다가 7/28에 깨졌다.)
+    미리 플래그를 세운 상태로 만들어 두어 검사 대상에서 제외한다.
+    """
+    year, month = _target_month()
+    apply_start, apply_end, notify_date = villa_router.apply_window_for_target(year, month)
+    db.add(models.VillaBookingRound(
+        target_year=year, target_month=month,
+        apply_start=apply_start, apply_end=apply_end, notify_date=notify_date,
+        status="open", reminder_sent=True, notify_warning_sent=True,
+    ))
+    db.commit()
+
+
 # --- 선착순 예약 ---
 
 def _notified_round_for(db, start_date):
@@ -195,7 +214,7 @@ def test_마감일_당일에는_아직_열려있다(db):
     assert row.status == "open"
 
 
-def test_마감_임박_리마인더는_1회만(db, make_user, captured):
+def test_마감_임박_리마인더는_1회만(db, make_user, captured, isolate_current_round):
     _admin(make_user)
     today = datetime.now().date()
     row = _make_round(db, 2020, 3, apply_end=today + timedelta(days=2),
@@ -212,7 +231,7 @@ def test_마감_임박_리마인더는_1회만(db, make_user, captured):
     assert len(captured["mail"]) == first, "리마인더는 한 번만 보낸다"
 
 
-def test_마감이_멀면_리마인더_없음(db, make_user, captured):
+def test_마감이_멀면_리마인더_없음(db, make_user, captured, isolate_current_round):
     _admin(make_user)
     today = datetime.now().date()
     row = _make_round(db, 2020, 3, apply_end=today + timedelta(days=10),
@@ -224,7 +243,7 @@ def test_마감이_멀면_리마인더_없음(db, make_user, captured):
     assert captured["mail"] == []
 
 
-def test_통보일_도달시_자동_통보(db, facilities, make_user, captured):
+def test_통보일_도달시_자동_통보(db, facilities, make_user, captured, isolate_current_round):
     today = datetime.now().date()
     row = _make_round(db, 2020, 3, apply_end=today - timedelta(days=2),
                       notify_date=today - timedelta(days=1), status="closed")
@@ -246,7 +265,7 @@ def test_통보일_도달시_자동_통보(db, facilities, make_user, captured):
     assert {m["to"] for m in captured["mail"]} == {"win@bit.kr", "lose@bit.kr"}
 
 
-def test_자동_통보는_중복_발송하지_않음(db, facilities, make_user, captured):
+def test_자동_통보는_중복_발송하지_않음(db, facilities, make_user, captured, isolate_current_round):
     today = datetime.now().date()
     row = _make_round(db, 2020, 3, apply_end=today - timedelta(days=2),
                       notify_date=today - timedelta(days=1), status="closed")
@@ -261,7 +280,7 @@ def test_자동_통보는_중복_발송하지_않음(db, facilities, make_user, 
     assert len(captured["mail"]) == sent
 
 
-def test_미확정_경합이_남으면_통보_보류하고_관리자_경고(db, facilities, make_user, captured):
+def test_미확정_경합이_남으면_통보_보류하고_관리자_경고(db, facilities, make_user, captured, isolate_current_round):
     _admin(make_user)
     today = datetime.now().date()
     row = _make_round(db, 2020, 3, apply_end=today - timedelta(days=2),
@@ -286,7 +305,7 @@ def test_미확정_경합이_남으면_통보_보류하고_관리자_경고(db, 
     assert "보류" in captured["slack"][0]["message"]
 
 
-def test_통보_보류_경고도_1회만(db, facilities, make_user, captured):
+def test_통보_보류_경고도_1회만(db, facilities, make_user, captured, isolate_current_round):
     _admin(make_user)
     today = datetime.now().date()
     row = _make_round(db, 2020, 3, apply_end=today - timedelta(days=2),
@@ -302,7 +321,7 @@ def test_통보_보류_경고도_1회만(db, facilities, make_user, captured):
     assert len(captured["mail"]) == first
 
 
-def test_보류후_확정하면_다음_실행에서_통보(db, facilities, make_user, captured):
+def test_보류후_확정하면_다음_실행에서_통보(db, facilities, make_user, captured, isolate_current_round):
     _admin(make_user)
     today = datetime.now().date()
     row = _make_round(db, 2020, 3, apply_end=today - timedelta(days=2),
@@ -323,7 +342,7 @@ def test_보류후_확정하면_다음_실행에서_통보(db, facilities, make_
     assert "wait@bit.kr" in {m["to"] for m in captured["mail"]}
 
 
-def test_한_번의_실행으로_open에서_notified까지(db, facilities, make_user, captured):
+def test_한_번의_실행으로_open에서_notified까지(db, facilities, make_user, captured, isolate_current_round):
     """
     마감과 통보가 같은 실행 안에서 연달아 일어나야 한다.
     SessionLocal이 autoflush=False라 flush를 빠뜨리면 통보 단계가
@@ -346,7 +365,7 @@ def test_한_번의_실행으로_open에서_notified까지(db, facilities, make_
     assert "win@bit.kr" in {m["to"] for m in captured["mail"]}
 
 
-def test_통보일_전에는_통보하지_않음(db, facilities, make_user, captured):
+def test_통보일_전에는_통보하지_않음(db, facilities, make_user, captured, isolate_current_round):
     today = datetime.now().date()
     row = _make_round(db, 2020, 3, apply_end=today - timedelta(days=1),
                       notify_date=today + timedelta(days=3), status="closed")
