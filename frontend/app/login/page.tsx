@@ -34,6 +34,7 @@ function LoginForm() {
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('user_name', data.user_name);
       localStorage.setItem('user_role', data.role);
+      localStorage.setItem('is_villa_admin', String(data.is_villa_admin));
       router.push(redirect || '/');
     } catch (e) {
       setDevError(e instanceof Error ? e.message : '로그인에 실패했습니다.');

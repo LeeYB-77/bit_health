@@ -141,6 +141,30 @@ def update_user_role(
     db.refresh(user)
     return user
 
+class VillaAdminUpdate(BaseModel):
+    is_villa_admin: bool
+
+@router.put("/{user_id}/villa-admin", response_model=schemas.User)
+def update_villa_admin(
+    user_id: int,
+    payload: VillaAdminUpdate,
+    db: Session = Depends(auth.get_db),
+    current_user: models.User = Depends(auth.get_current_active_admin),
+):
+    """
+    별장 예약만 위임 관리하는 담당자를 지정한다. role='admin'과 독립적이라,
+    시스템 전체 관리자가 아니어도 비트별장 신청/확정/취소승인을 처리하고
+    관련 알림을 받을 수 있다. 자기 자신도 지정 가능하다 — role 변경과 달리
+    잠금 위험이 없다(별장 권한을 잃어도 role='admin'이면 여전히 전체 접근 가능).
+    """
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_villa_admin = payload.is_villa_admin
+    db.commit()
+    db.refresh(user)
+    return user
+
 @router.get("/me/dashboard")
 def get_user_dashboard_stats(
     current_user: models.User = Depends(auth.get_current_active_user),

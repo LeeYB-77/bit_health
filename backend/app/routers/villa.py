@@ -510,6 +510,9 @@ def apply_villa(
         villa_notify.notify_confirmed(db, reservation)  # 강제 여부가 메시지에 반영된다
         _notify_newly_forced(db, reservation, newly_forced)
 
+    # 정규예약 대기든 선착순 즉시확정이든, 신청이 접수될 때마다 관리자에게 알린다.
+    villa_notify.notify_admins_new_application(db, reservation, is_open_booking)
+
     return reservation
 
 
@@ -661,10 +664,8 @@ def update_extra_info(
 
 
 def _notify_admins_cancel_request(db: Session, reservation, applicant):
-    admins = db.query(models.User).filter(
-        models.User.role == "admin",
-        models.User.email.isnot(None),
-    ).all()
+    # 별장 관리 알림 대상(전체 관리자 + 별장 위임 담당자)과 동일한 기준을 쓴다.
+    admins = villa_notify.villa_admin_recipients(db)
 
     villa_name = reservation.facility.name if reservation.facility else "비트별장"
     period = f"{reservation.start_date} ~ {reservation.end_date}"
@@ -759,7 +760,7 @@ def _serialize_application(r, usage_counts):
 
 @router.get("/admin/rounds")
 def list_rounds(
-    current_user: models.User = Depends(auth.get_current_active_admin),
+    current_user: models.User = Depends(auth.get_current_villa_manager),
     db: Session = Depends(get_db),
 ):
     rows = db.query(models.VillaBookingRound).order_by(
@@ -791,7 +792,7 @@ def list_rounds(
 @router.post("/admin/rounds")
 def upsert_round(
     payload: schemas.VillaRoundUpsert,
-    current_user: models.User = Depends(auth.get_current_active_admin),
+    current_user: models.User = Depends(auth.get_current_villa_manager),
     db: Session = Depends(get_db),
 ):
     """회차를 만들거나 상태를 바꾼다. 조기 마감 같은 예외 상황용."""
@@ -822,7 +823,7 @@ def list_applications(
     year: int = None,
     month: int = None,
     facility_id: int = None,
-    current_user: models.User = Depends(auth.get_current_active_admin),
+    current_user: models.User = Depends(auth.get_current_villa_manager),
     db: Session = Depends(get_db),
 ):
     """
@@ -896,7 +897,7 @@ def list_applications(
 @router.post("/admin/confirm/{reservation_id}")
 def confirm_application(
     reservation_id: int,
-    current_user: models.User = Depends(auth.get_current_active_admin),
+    current_user: models.User = Depends(auth.get_current_villa_manager),
     db: Session = Depends(get_db),
 ):
     reservation = db.query(models.VillaReservation).filter(
@@ -941,7 +942,7 @@ def confirm_application(
 
 @router.get("/admin/cancel-requests")
 def list_cancel_requests(
-    current_user: models.User = Depends(auth.get_current_active_admin),
+    current_user: models.User = Depends(auth.get_current_villa_manager),
     db: Session = Depends(get_db),
 ):
     rows = db.query(models.VillaReservation).filter(
@@ -979,7 +980,7 @@ def _get_cancel_requested_or_400(db: Session, reservation_id: int):
 @router.post("/admin/cancel-approve/{reservation_id}")
 def approve_cancel(
     reservation_id: int,
-    current_user: models.User = Depends(auth.get_current_active_admin),
+    current_user: models.User = Depends(auth.get_current_villa_manager),
     db: Session = Depends(get_db),
 ):
     """승인하면 해당 기간이 풀려 다시 신청 가능해진다."""
@@ -1000,7 +1001,7 @@ def approve_cancel(
 @router.post("/admin/cancel-reject/{reservation_id}")
 def reject_cancel(
     reservation_id: int,
-    current_user: models.User = Depends(auth.get_current_active_admin),
+    current_user: models.User = Depends(auth.get_current_villa_manager),
     db: Session = Depends(get_db),
 ):
     """반려하면 확정 상태로 되돌아간다. 요청 흔적을 남기면 UI에 취소 요청중으로 잘못 보인다."""
@@ -1017,7 +1018,7 @@ def reject_cancel(
 @router.post("/admin/notify/{round_id}")
 def notify_round_results(
     round_id: int,
-    current_user: models.User = Depends(auth.get_current_active_admin),
+    current_user: models.User = Depends(auth.get_current_villa_manager),
     db: Session = Depends(get_db),
 ):
     """

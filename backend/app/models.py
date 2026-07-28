@@ -17,6 +17,9 @@ class User(Base):
     # (어느 행이 UTC이고 어느 행이 KST인지 판별할 근거가 없다).
     created_at = Column(DateTime, default=datetime.now)
     golf_suspended_until = Column(DateTime, nullable=True)  # 미사용 패널티: 이 시각까지 예약 불가
+    # 별장 예약만 위임받아 관리하는 담당자. role='admin'과 별개로, 시스템 전체
+    # 관리자가 아니어도 비트별장 신청/확정/취소승인과 관련 알림을 받을 수 있다.
+    is_villa_admin = Column(Boolean, default=False)
 
 class Facility(Base):
     __tablename__ = "facilities"

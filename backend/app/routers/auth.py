@@ -33,7 +33,11 @@ async def login_for_access_token(form_data: schemas.LoginRequest, db: Session = 
     access_token = auth_utils.create_access_token(
         data={"sub": str(user.id), "name": user.name, "role": user.role}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer", "user_name": user.name, "role": user.role}
+    return {
+        "access_token": access_token, "token_type": "bearer",
+        "user_name": user.name, "role": user.role,
+        "is_villa_admin": user.is_villa_admin,
+    }
 
 class SSOLoginRequest(BaseModel):
     code: str
@@ -112,4 +116,8 @@ async def sso_login(req: SSOLoginRequest, db: Session = Depends(database.get_db)
     access_token = auth_utils.create_access_token(
         data={"sub": str(user.id), "name": user.name, "role": user.role}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer", "user_name": user.name, "role": user.role, "is_new_user": is_new_user}
+    return {
+        "access_token": access_token, "token_type": "bearer",
+        "user_name": user.name, "role": user.role,
+        "is_villa_admin": user.is_villa_admin, "is_new_user": is_new_user,
+    }

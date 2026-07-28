@@ -82,3 +82,13 @@ async def get_current_active_admin(current_user: models.User = Depends(get_curre
     if current_user.role != "admin":
         raise HTTPException(status_code=400, detail="Inactive user or not admin")
     return current_user
+
+async def get_current_villa_manager(current_user: models.User = Depends(get_current_user)):
+    """
+    비트별장 관리 API 전용 게이트. 시스템 전체 관리자(role='admin')는 물론
+    별장만 위임받은 담당자(is_villa_admin)도 통과한다. golf/users/smtp 등
+    다른 관리 영역은 여전히 get_current_active_admin(전체 관리자)만 허용한다.
+    """
+    if current_user.role != "admin" and not current_user.is_villa_admin:
+        raise HTTPException(status_code=400, detail="비트별장 관리 권한이 없습니다.")
+    return current_user

@@ -131,6 +131,11 @@ def test_일괄_통보(client, db, facilities, make_user, auth_headers, captured
     rows = db.query(models.VillaReservation).order_by(models.VillaReservation.id).all()
     client.post(f"/api/villa/admin/confirm/{rows[0].id}", headers=auth_headers(admin))
 
+    # 신청 접수 알림(관리자용)은 이 테스트의 검증 대상이 아니다. 여기서는
+    # 확정 결과 통보(신청자용)만 확인한다.
+    captured["mail"].clear()
+    captured["slack"].clear()
+
     res = client.post(f"/api/villa/admin/notify/{_round_id(db)}", headers=auth_headers(admin))
     assert res.status_code == 200
     body = res.json()
@@ -170,6 +175,10 @@ def test_미확정_경합이_남으면_통보_보류(client, db, facilities, mak
     for name in ("A", "B"):
         client.post("/api/villa/apply", headers=auth_headers(make_user(name=name, email=f"{name}@bit.kr")),
                     json=_payload(villa.id, _in_target_month(10), _in_target_month(12)))
+
+    # 신청 접수 알림(관리자용)은 이 테스트의 검증 대상이 아니다.
+    captured["mail"].clear()
+    captured["slack"].clear()
 
     res = client.post(f"/api/villa/admin/notify/{_round_id(db)}", headers=auth_headers(admin))
     assert res.status_code == 400

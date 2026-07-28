@@ -13,6 +13,7 @@ export default function Home() {
   const [dashboardStats, setDashboardStats] = useState<UserDashboardStats>({ monthly_count: 0, has_today_reservation: false });
   const [userName, setUserName] = useState('');
   const [userRole, setUserRole] = useState('');
+  const [isVillaAdmin, setIsVillaAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -26,6 +27,7 @@ export default function Home() {
 
     setUserName(name || '회원');
     setUserRole(localStorage.getItem('user_role') || 'user');
+    setIsVillaAdmin(localStorage.getItem('is_villa_admin') === 'true');
     fetchStatus();
   }, [router]);
 
@@ -75,7 +77,7 @@ export default function Home() {
         <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-between">
           <Image src="/logo.svg" alt="BIT Wellness Center" width={80} height={24} className="h-6 w-auto" />
           <div className="flex items-center gap-1">
-            {userRole === 'admin' && (
+            {(userRole === 'admin' || isVillaAdmin) && (
               <button
                 onClick={() => router.push('/admin')}
                 className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors flex items-center gap-1"

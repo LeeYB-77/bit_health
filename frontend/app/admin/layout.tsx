@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Home } from 'lucide-react';
 
 export default function AdminLayout({
@@ -10,18 +10,28 @@ export default function AdminLayout({
     children: React.ReactNode;
 }) {
     const router = useRouter();
+    const pathname = usePathname();
     const [authorized, setAuthorized] = useState(false);
 
     useEffect(() => {
         const token = localStorage.getItem('access_token');
         const role = localStorage.getItem('user_role');
+        const isVillaAdmin = localStorage.getItem('is_villa_admin') === 'true';
 
-        if (!token || role !== 'admin') {
+        if (!token || (role !== 'admin' && !isVillaAdmin)) {
             router.push('/login');
-        } else {
-            setAuthorized(true);
+            return;
         }
-    }, [router]);
+
+        // 별장만 위임 관리하는 담당자는 golf/users/smtp 등 다른 관리 영역의
+        // API를 호출할 권한이 없다. 대시보드 대신 비트별장 관리 화면으로 보낸다.
+        if (role !== 'admin' && isVillaAdmin && pathname !== '/admin/villa') {
+            router.replace('/admin/villa');
+            return;
+        }
+
+        setAuthorized(true);
+    }, [router, pathname]);
 
     if (!authorized) {
         return (

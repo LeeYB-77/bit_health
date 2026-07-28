@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { API_URL } from '@/lib/api';
-import { ArrowLeft, Search, CheckCircle, AlertCircle, Shield, User as UserIcon } from 'lucide-react';
+import { ArrowLeft, Search, CheckCircle, AlertCircle, Shield, User as UserIcon, Home } from 'lucide-react';
 
 interface User {
   id: number;
@@ -11,6 +11,7 @@ interface User {
   birth_date: string;
   department: string | null;
   role: string;
+  is_villa_admin: boolean;
 }
 
 export default function AdminUsersPage() {
@@ -67,6 +68,29 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handleUpdateVillaAdmin = async (id: number, next: boolean) => {
+    if (!confirm(next ? '이 사용자를 비트별장 위임 관리자로 지정하시겠습니까?' : '비트별장 위임 관리자 지정을 해제하시겠습니까?')) return;
+
+    try {
+      const token = localStorage.getItem('access_token');
+      const res = await fetch(`${API_URL}/api/users/${id}/villa-admin`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ is_villa_admin: next })
+      });
+
+      if (!res.ok) throw new Error('별장 관리자 설정 변경에 실패했습니다.');
+
+      setMessage({ type: 'success', text: '비트별장 위임 관리자 설정이 변경되었습니다.' });
+      fetchUsers();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    }
+  };
+
   const filteredUsers = users.filter(user =>
     user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (user.department && user.department.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -93,6 +117,7 @@ export default function AdminUsersPage() {
         
         <div className="mb-6 p-4 rounded-xl bg-blue-50 border border-blue-100 text-blue-800 text-sm">
           <p>BIT SSO를 통해 가입된 회원들의 시스템 관리자 권한 여부를 설정할 수 있습니다. <strong>관리자</strong> 권한을 받은 사용자는 이 대시보드에 접근할 수 있게 됩니다.</p>
+          <p className="mt-1.5">별도로 <strong>비트별장 담당자</strong>로 지정하면 전체 관리자가 아니어도 별장 신청·확정·취소승인을 처리하고 관련 알림을 받을 수 있습니다(다른 관리 기능은 접근 불가).</p>
         </div>
 
         {/* Feedback Message */}
@@ -134,6 +159,7 @@ export default function AdminUsersPage() {
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">부서</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">현재 권한 상태</th>
                       <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">권한 설정</th>
+                      <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">비트별장 관리</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -174,11 +200,33 @@ export default function AdminUsersPage() {
                               </button>
                             )}
                           </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            {user.role === 'admin' ? (
+                              <span className="text-xs text-gray-400" title="전체 관리자는 비트별장 관리 권한을 이미 포함합니다.">
+                                (전체 관리자 포함)
+                              </span>
+                            ) : user.is_villa_admin ? (
+                              <button
+                                onClick={() => handleUpdateVillaAdmin(user.id, false)}
+                                className="px-3 py-1.5 rounded-md transition-colors text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+                              >
+                                <Home size={12} className="inline mr-1" />
+                                위임 해제
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleUpdateVillaAdmin(user.id, true)}
+                                className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-xs font-semibold"
+                              >
+                                별장 담당자로 지정
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-500">
+                        <td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-500">
                           검색 결과가 없습니다.
                         </td>
                       </tr>

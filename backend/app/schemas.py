@@ -9,6 +9,7 @@ class UserBase(BaseModel):
     sub: Optional[str] = None
     department: Optional[str] = None
     role: str = "user"
+    is_villa_admin: bool = False
 
 class UserCreate(UserBase):
     pass
@@ -29,6 +30,7 @@ class Token(BaseModel):
     token_type: str
     user_name: str
     role: str
+    is_villa_admin: bool = False
     is_new_user: Optional[bool] = False
 
 class TokenData(BaseModel):

@@ -11,6 +11,8 @@ export interface LoginResponse {
   token_type: string;
   user_name: string;
   role: string;
+  // role='admin'과 별개로 비트별장만 위임 관리하는 담당자 여부
+  is_villa_admin: boolean;
   is_new_user?: boolean;
 }
 
@@ -53,6 +55,7 @@ export const logout = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('user_role');
     localStorage.removeItem('user_name');
+    localStorage.removeItem('is_villa_admin');
     window.location.href = '/login';
   }
 };

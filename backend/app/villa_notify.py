@@ -2,6 +2,7 @@
 import logging
 import os
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from . import email_utils, slack_utils
@@ -163,13 +164,22 @@ def notify_cancel_approved(db: Session, reservation) -> bool:
     return _dispatch(db, reservation.user, f"[BIT] {villa} 예약 취소가 승인되었습니다", slack_message, mail_body)
 
 
-def _notify_admins(db: Session, subject: str, slack_message: str, mail_body: str) -> int:
+def villa_admin_recipients(db: Session):
+    """
+    비트별장 관리 알림을 받을 대상. 시스템 전체 관리자(role='admin')와 별장만
+    위임받은 담당자(is_villa_admin)의 합집합이다. 위임 담당자를 지정하지 않은
+    환경에서는 전체 관리자만 남아 기존 동작과 동일하다(안전한 기본값).
+    """
     from . import models  # 순환 import를 피해 함수 안에서 가져온다
 
-    admins = db.query(models.User).filter(
-        models.User.role == "admin",
+    return db.query(models.User).filter(
+        or_(models.User.role == "admin", models.User.is_villa_admin == True),
         models.User.email.isnot(None),
     ).all()
+
+
+def _notify_admins(db: Session, subject: str, slack_message: str, mail_body: str) -> int:
+    admins = villa_admin_recipients(db)
 
     sent = 0
     for admin in admins:
@@ -180,6 +190,42 @@ def _notify_admins(db: Session, subject: str, slack_message: str, mail_body: str
         # 관리자 계정에 이메일이 없으면 알림이 조용히 사라진다. 로그로 드러낸다.
         logger.warning(f"관리자 알림을 아무에게도 보내지 못했습니다: {subject}")
     return sent
+
+
+def notify_admins_new_application(db: Session, reservation, is_open_booking: bool) -> int:
+    """
+    예약 신청이 접수될 때마다(정규예약 대기 또는 선착순 즉시확정 모두) 관리자에게
+    알린다. 취소 요청과 달리 방치 위험은 없지만, 관리자가 접수 현황을 실시간으로
+    파악하고 싶다는 요청에 따라 매 신청마다 보낸다.
+    """
+    villa = _villa_name(reservation)
+    period = _period(reservation)
+    applicant = reservation.user.name if reservation.user else "(알 수 없음)"
+    dept = f" · {reservation.user.department}" if reservation.user and reservation.user.department else ""
+
+    if is_open_booking:
+        title = "선착순 예약 확정"
+        detail = "정규예약 마감 후 남은 날짜라 선착순으로 즉시 확정되었습니다."
+    else:
+        title = "새 예약 신청"
+        detail = "정규예약 접수중입니다. 마감 후 관리자 페이지에서 확정 처리를 해주세요."
+
+    slack_message = (
+        f"📋 *[비트별장 {title}]*\n\n"
+        f"*{applicant}*{dept} 님이 신청했습니다.\n"
+        f"• *별장*: {villa}\n"
+        f"• *기간*: {period}\n"
+        f"• *인원*: {reservation.participant_count}명\n\n"
+        f"{detail}"
+    )
+    mail_body = (
+        f"{applicant}{dept} 님이 비트별장을 신청했습니다.\n\n"
+        f"- 별장: {villa}\n"
+        f"- 기간: {period}\n"
+        f"- 인원: {reservation.participant_count}명\n\n"
+        f"{detail}\n"
+    )
+    return _notify_admins(db, f"[BIT] 비트별장 {title}", slack_message, mail_body)
 
 
 def notify_admins_deadline_soon(db: Session, booking_round, pending_count: int) -> int:

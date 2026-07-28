@@ -31,6 +31,7 @@ function CallbackHandler() {
         localStorage.setItem('access_token', data.access_token);
         localStorage.setItem('user_name', data.user_name);
         localStorage.setItem('user_role', data.role);
+        localStorage.setItem('is_villa_admin', String(data.is_villa_admin));
         
         if (data.is_new_user) {
           alert('사용자 등록 완료');

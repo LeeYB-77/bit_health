@@ -83,7 +83,8 @@ def facilities(db):
 def make_user(db):
     counter = {"n": 0}
 
-    def _make(name=None, role="user", birth_date=None, sub=None, email=None, department=None):
+    def _make(name=None, role="user", birth_date=None, sub=None, email=None, department=None,
+              is_villa_admin=False):
         counter["n"] += 1
         n = counter["n"]
         user = models.User(
@@ -93,6 +94,7 @@ def make_user(db):
             sub=sub,
             email=email,
             department=department,
+            is_villa_admin=is_villa_admin,
         )
         db.add(user)
         db.commit()

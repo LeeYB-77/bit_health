@@ -81,6 +81,9 @@ SQL_COMMANDS = [
     "UPDATE villa_reservations SET requested_checkin_time = checkin_time WHERE requested_checkin_time IS NULL;",
     "UPDATE villa_reservations SET requested_checkout_time = checkout_time WHERE requested_checkout_time IS NULL;",
 
+    # 별장 위임 관리자 플래그 (role='admin'과 별개로 비트별장만 관리)
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_villa_admin BOOLEAN DEFAULT FALSE;",
+
     # 3. 별장 시설 시드 (정원 20명)
     """
     INSERT INTO facilities (name, type, capacity)
