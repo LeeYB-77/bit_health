@@ -3,8 +3,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import {
-    ArrowLeft, Calendar, ChevronLeft, ChevronRight, Info, Users, X, Trash2, Loader2,
+    ArrowLeft, Calendar, ChevronLeft, ChevronRight, Info, MapPin, Users, X, Trash2, Loader2,
 } from 'lucide-react';
 import {
     getVillas, getVillaRound, getVillaCalendar, getMyVillaReservations,
@@ -58,6 +59,42 @@ const nightsBetween = (startISO: string, endISO: string) =>
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
+// 별장별 안내 사진. 파일은 frontend/public/villas/{slug}/ 에 있다.
+const VILLA_INFO: Record<string, { slug: string; images: { file: string; label: string }[] }> = {
+    청평별장: {
+        slug: 'cheongpyeong',
+        images: [
+            { file: 'exterior-1.jpg', label: '건물 전경' },
+            { file: 'exterior-2.jpg', label: '건물 전경' },
+            { file: 'view.jpg', label: '숙소 뷰' },
+            { file: 'pool.jpg', label: '야외 수영장' },
+            { file: 'living-room-1.jpg', label: '거실' },
+            { file: 'living-room-sofa.jpg', label: '거실 쇼파' },
+            { file: 'living-room-tv.jpg', label: '거실 TV' },
+            { file: 'living-room-view.jpg', label: '거실 뷰' },
+            { file: 'multipurpose-room.jpg', label: '다용도 거실' },
+            { file: 'hallway.jpg', label: '복도' },
+            { file: 'master-bedroom.jpg', label: '안방' },
+            { file: 'bedroom-1.jpg', label: '작은방 1' },
+            { file: 'bedroom-2.jpg', label: '작은방 2' },
+            { file: 'kitchen.jpg', label: '주방' },
+            { file: 'bathroom.jpg', label: '공용 욕실' },
+            { file: 'floorplan.jpg', label: '평면도' },
+        ],
+    },
+    동비재: {
+        slug: 'dongbijae',
+        images: [
+            { file: 'exterior.png', label: '아파트 전경' },
+            { file: 'view.jpg', label: '울산바위 뷰' },
+            { file: 'master-bedroom.jpg', label: '안방' },
+            { file: 'kitchen.jpg', label: '주방' },
+            { file: 'powder-room.jpg', label: '파우더룸' },
+            { file: 'floorplan.png', label: '평면도' },
+        ],
+    },
+};
+
 const STATUS_META: Record<VillaStatus, { label: string; cls: string }> = {
     applied: { label: '신청중', cls: 'bg-amber-100 text-amber-700' },
     confirmed: { label: '확정', cls: 'bg-blue-100 text-blue-700' },
@@ -97,7 +134,12 @@ export default function VillaPage() {
     const [cancelTarget, setCancelTarget] = useState<VillaMyReservation | null>(null);
     const [cancelReason, setCancelReason] = useState('');
 
+    // 별장 안내(사진) 모달
+    const [infoOpen, setInfoOpen] = useState(false);
+    const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+
     const selectedVilla = villas.find(v => v.id === selectedVillaId) ?? null;
+    const villaInfo = selectedVilla ? VILLA_INFO[selectedVilla.name] : null;
 
     useEffect(() => {
         if (!localStorage.getItem('access_token')) {
@@ -313,6 +355,21 @@ export default function VillaPage() {
                                 </button>
                             ))}
                         </div>
+
+                        {/* 별장 안내(사진) 진입 */}
+                        {selectedVilla && (
+                            <button
+                                onClick={() => setInfoOpen(true)}
+                                className="w-full flex items-center gap-2 rounded-2xl bg-white p-3.5 shadow-sm border border-gray-100 text-left hover:bg-gray-50 transition-colors"
+                            >
+                                <MapPin size={16} className="text-blue-500 shrink-0" />
+                                <span className="text-xs text-gray-600 flex-1 truncate">
+                                    {selectedVilla.address || `${selectedVilla.name} 안내`}
+                                    {selectedVilla.size && <span className="text-gray-400"> · {selectedVilla.size}</span>}
+                                </span>
+                                <span className="text-[11px] font-bold text-blue-600 shrink-0">사진·안내 보기</span>
+                            </button>
+                        )}
 
                         {/* 회차 안내 */}
                         {round && (
@@ -717,6 +774,108 @@ export default function VillaPage() {
                             {submitting ? <Loader2 size={18} className="animate-spin" /> : '취소 요청하기'}
                         </button>
                     </div>
+                </div>
+            )}
+
+            {/* 별장 안내(사진) 모달 */}
+            {infoOpen && selectedVilla && (
+                <div
+                    className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                    onClick={() => setInfoOpen(false)}
+                >
+                    <div
+                        className="bg-white w-full max-w-lg rounded-3xl p-5 shadow-2xl max-h-[85vh] overflow-y-auto"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between mb-3">
+                            <h2 className="font-bold text-gray-900">{selectedVilla.name} 안내</h2>
+                            <button
+                                onClick={() => setInfoOpen(false)}
+                                className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        <div className="space-y-1 mb-4">
+                            {selectedVilla.address && (
+                                <p className="text-sm text-gray-700 flex items-start gap-1.5">
+                                    <MapPin size={14} className="text-blue-500 mt-0.5 shrink-0" />
+                                    {selectedVilla.address}
+                                </p>
+                            )}
+                            {selectedVilla.size && (
+                                <p className="text-xs text-gray-500 ml-[19px]">
+                                    {selectedVilla.size} · 정원 {selectedVilla.capacity}명
+                                </p>
+                            )}
+                            {selectedVilla.notice && (
+                                <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mt-2 leading-relaxed">
+                                    {selectedVilla.notice}
+                                </p>
+                            )}
+                        </div>
+
+                        {villaInfo && (
+                            <div className="grid grid-cols-2 gap-2">
+                                {villaInfo.images.map((img, idx) => (
+                                    <button
+                                        key={img.file}
+                                        onClick={() => setLightboxIdx(idx)}
+                                        className="relative aspect-[4/3] rounded-xl overflow-hidden bg-gray-100"
+                                    >
+                                        <Image
+                                            src={`/villas/${villaInfo.slug}/${img.file}`}
+                                            alt={img.label}
+                                            fill
+                                            className="object-cover"
+                                        />
+                                        <span className="absolute bottom-0 left-0 right-0 bg-black/40 text-white text-[10px] px-1.5 py-1 truncate">
+                                            {img.label}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* 사진 확대 보기 */}
+            {infoOpen && villaInfo && lightboxIdx !== null && (
+                <div
+                    className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4"
+                    onClick={() => setLightboxIdx(null)}
+                >
+                    <button
+                        onClick={() => setLightboxIdx(null)}
+                        className="absolute top-4 right-4 text-white/80 hover:text-white"
+                    >
+                        <X size={24} />
+                    </button>
+                    <button
+                        onClick={e => { e.stopPropagation(); setLightboxIdx((lightboxIdx! - 1 + villaInfo.images.length) % villaInfo.images.length); }}
+                        className="absolute left-2 sm:left-6 text-white/70 hover:text-white p-2"
+                    >
+                        <ChevronLeft size={28} />
+                    </button>
+                    <div className="relative w-full max-w-2xl aspect-[4/3]" onClick={e => e.stopPropagation()}>
+                        <Image
+                            src={`/villas/${villaInfo.slug}/${villaInfo.images[lightboxIdx].file}`}
+                            alt={villaInfo.images[lightboxIdx].label}
+                            fill
+                            className="object-contain"
+                        />
+                    </div>
+                    <button
+                        onClick={e => { e.stopPropagation(); setLightboxIdx((lightboxIdx! + 1) % villaInfo.images.length); }}
+                        className="absolute right-2 sm:right-6 text-white/70 hover:text-white p-2"
+                    >
+                        <ChevronRight size={28} />
+                    </button>
+                    <p className="absolute bottom-6 left-0 right-0 text-center text-white text-sm">
+                        {villaInfo.images[lightboxIdx].label}
+                    </p>
                 </div>
             )}
         </div>

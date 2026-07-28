@@ -114,6 +114,28 @@ SQL_COMMANDS = [
     )::text
     WHERE key = 'villa_settings';
     """,
+    # 안내페이지용 별장 주소/평수 시드. jsonb_set의 create_missing(기본 true)이
+    # villas 하위 키가 없어도 새로 만들어주므로 기존 notice 등 다른 값은 보존된다.
+    """
+    UPDATE system_settings
+    SET value = (
+        jsonb_set(
+            jsonb_set(value::jsonb, '{villas,청평별장,address}', '"경기도 가평군 설악면 유명로 2304-34 르메이에르청평빌라 103동 402호(F층 시드니Ⅱ)"'),
+            '{villas,청평별장,size}', '"56평"'
+        )
+    )::text
+    WHERE key = 'villa_settings';
+    """,
+    """
+    UPDATE system_settings
+    SET value = (
+        jsonb_set(
+            jsonb_set(value::jsonb, '{villas,동비재,address}', '"강원도 속초시 금호동 630 생모리츠아파트 102동 1201호(속초 청초호 앞에 위치)"'),
+            '{villas,동비재,size}', '"51평"'
+        )
+    )::text
+    WHERE key = 'villa_settings';
+    """,
 ]
 
 VERIFY_SQL = (

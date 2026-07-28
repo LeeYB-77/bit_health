@@ -35,8 +35,8 @@ DEFAULT_VILLA_SETTINGS = {
     "default_checkin_time": "14:00",
     "default_checkout_time": "12:00",
     "villas": {
-        "청평별장": {"address": "", "notice": ""},
-        "동비재": {"address": "", "notice": ""},
+        "청평별장": {"address": "경기도 가평군 설악면 유명로 2304-34 르메이에르청평빌라 103동 402호(F층 시드니Ⅱ)", "size": "56평", "notice": ""},
+        "동비재": {"address": "강원도 속초시 금호동 630 생모리츠아파트 102동 1201호(속초 청초호 앞에 위치)", "size": "51평", "notice": ""},
     },
 }
 
@@ -291,6 +291,7 @@ def list_villas(
             "name": v.name,
             "capacity": v.capacity,
             "address": (per_villa.get(v.name) or {}).get("address", ""),
+            "size": (per_villa.get(v.name) or {}).get("size", ""),
             "notice": (per_villa.get(v.name) or {}).get("notice", ""),
             "default_checkin_time": settings.get("default_checkin_time", "14:00"),
             "default_checkout_time": settings.get("default_checkout_time", "12:00"),

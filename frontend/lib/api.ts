@@ -150,6 +150,7 @@ export interface Villa {
   name: string;
   capacity: number;
   address: string;
+  size: string;
   notice: string;
   default_checkin_time: string;
   default_checkout_time: string;
