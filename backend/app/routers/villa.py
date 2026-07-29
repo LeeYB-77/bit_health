@@ -608,6 +608,7 @@ def _extra_info_payload(reservation):
         "vehicle_numbers": reservation.vehicle_numbers,
         "adult_count": reservation.adult_count,
         "child_count": reservation.child_count,
+        "contact_phone": reservation.contact_phone,
         "submitted": reservation.extra_info_updated_at is not None,
         "composition_total": total,
     }
@@ -644,6 +645,7 @@ def update_extra_info(
     reservation.vehicle_numbers = (payload.vehicle_numbers or "").strip() or None
     reservation.adult_count = payload.adult_count
     reservation.child_count = payload.child_count
+    reservation.contact_phone = (payload.contact_phone or "").strip() or None
     reservation.extra_info_updated_at = datetime.now()
     db.commit()
     db.refresh(reservation)
@@ -853,6 +855,7 @@ def _serialize_application(r, usage_counts):
         "vehicle_numbers": r.vehicle_numbers,
         "adult_count": r.adult_count,
         "child_count": r.child_count,
+        "contact_phone": r.contact_phone,
         "cancel_reason": r.cancel_reason,
     }
 

@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, Car, CheckCircle, Loader2, Users, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Car, CheckCircle, Loader2, Phone, Users, X } from 'lucide-react';
 import { getVillaExtraInfo, saveVillaExtraInfo, VillaExtraInfo } from '@/lib/api';
 
 const MAX_VEHICLES = 10;
@@ -18,6 +18,7 @@ export default function VillaExtraInfoPage() {
     const [vehicleNumbers, setVehicleNumbers] = useState<string[]>([]);
     const [adultCount, setAdultCount] = useState(0);
     const [childCount, setChildCount] = useState(0);
+    const [contactPhone, setContactPhone] = useState('');
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -36,6 +37,7 @@ export default function VillaExtraInfoPage() {
             // 처음 들어온 경우 신청 인원을 성인 기본값으로 채워 입력 부담을 줄인다.
             setAdultCount(data.adult_count ?? (data.submitted ? 0 : data.participant_count));
             setChildCount(data.child_count ?? 0);
+            setContactPhone(data.contact_phone ?? '');
         } catch (e) {
             setError(e instanceof Error ? e.message : '예약 정보를 불러오지 못했습니다.');
         } finally {
@@ -80,6 +82,7 @@ export default function VillaExtraInfoPage() {
                 vehicle_numbers: vehicleNumbers.map(v => v.trim()).filter(Boolean).join(', ') || null,
                 adult_count: adultCount,
                 child_count: childCount,
+                contact_phone: contactPhone.trim() || null,
             });
             setSaved({ warning: result.warning ?? null });
             setInfo(result);
@@ -227,6 +230,23 @@ export default function VillaExtraInfoPage() {
                                 합계 {total}명 / 신청 인원 {info.participant_count}명
                                 {mismatch && ' · 인원이 달라도 저장은 가능합니다. 변경이 필요하면 관리팀에 알려 주세요.'}
                             </p>
+                        </section>
+
+                        {/* 연락처 */}
+                        <section className="rounded-2xl bg-white p-4 shadow-sm border border-gray-100 space-y-3">
+                            <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                                <Phone size={16} className="text-blue-600" /> 이용자 연락처
+                            </h2>
+                            <label className="block">
+                                <span className="text-xs font-bold text-gray-600">현장에서 연락 가능한 번호</span>
+                                <input
+                                    type="tel"
+                                    value={contactPhone}
+                                    onChange={e => setContactPhone(e.target.value)}
+                                    placeholder="010-1234-5678"
+                                    className={inputCls}
+                                />
+                            </label>
                         </section>
 
                         <button

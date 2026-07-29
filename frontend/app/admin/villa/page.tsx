@@ -30,6 +30,7 @@ interface Application {
     vehicle_numbers: string | null;
     adult_count: number | null;
     child_count: number | null;
+    contact_phone: string | null;
     cancel_reason: string | null;
 }
 
@@ -582,6 +583,9 @@ export default function AdminVillaPage() {
                                 <p className="text-gray-500">
                                     차량 {a.vehicle_count != null ? `${a.vehicle_count}대` : '미입력'}
                                     {a.vehicle_numbers && ` (${a.vehicle_numbers})`}
+                                </p>
+                                <p className="text-gray-500">
+                                    연락처 {a.contact_phone || '미입력'}
                                 </p>
                                 <p className="text-xs text-gray-400">
                                     최근 1년 {a.usage_count}회 이용 · 신청 {a.created_at ? new Date(a.created_at).toLocaleString('ko-KR') : '-'}

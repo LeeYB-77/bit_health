@@ -291,6 +291,7 @@ export interface VillaExtraInfo {
   vehicle_numbers: string | null;
   adult_count: number | null;
   child_count: number | null;
+  contact_phone: string | null;
   submitted: boolean;
   composition_total: number;
   warning?: string | null;
@@ -307,6 +308,7 @@ export const saveVillaExtraInfo = async (
     vehicle_numbers: string | null;
     adult_count: number;
     child_count: number;
+    contact_phone: string | null;
   }
 ): Promise<VillaExtraInfo> => {
   return fetcher(`/api/villa/${id}/extra`, {

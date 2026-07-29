@@ -316,3 +316,34 @@ def test_차량번호_공백만_입력하면_None(client, db, facilities, make_u
                 json={**EXTRA, "vehicle_count": 0, "vehicle_numbers": "   "})
     db.refresh(row)
     assert row.vehicle_numbers is None
+
+
+def test_연락처_저장과_조회(client, db, facilities, make_user, auth_headers):
+    user = make_user()
+    row = _confirmed(db, facilities, user)
+
+    res = client.post(f"/api/villa/{row.id}/extra", headers=auth_headers(user),
+                      json={**EXTRA, "contact_phone": "010-1234-5678"})
+    assert res.status_code == 200
+    assert res.json()["contact_phone"] == "010-1234-5678"
+
+    got = client.get(f"/api/villa/{row.id}/extra", headers=auth_headers(user)).json()
+    assert got["contact_phone"] == "010-1234-5678"
+
+
+def test_연락처_공백만_입력하면_None(client, db, facilities, make_user, auth_headers):
+    user = make_user()
+    row = _confirmed(db, facilities, user)
+    client.post(f"/api/villa/{row.id}/extra", headers=auth_headers(user),
+                json={**EXTRA, "contact_phone": "   "})
+    db.refresh(row)
+    assert row.contact_phone is None
+
+
+def test_연락처_생략해도_저장_가능(client, db, facilities, make_user, auth_headers):
+    """연락처는 선택 입력이라 안 보내도 저장이 실패하면 안 된다."""
+    user = make_user()
+    row = _confirmed(db, facilities, user)
+    res = client.post(f"/api/villa/{row.id}/extra", headers=auth_headers(user), json=EXTRA)
+    assert res.status_code == 200
+    assert res.json()["contact_phone"] is None

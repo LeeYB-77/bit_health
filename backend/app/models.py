@@ -129,6 +129,7 @@ class VillaReservation(Base):
     vehicle_numbers = Column(Text, nullable=True)  # 쉼표 구분
     adult_count = Column(Integer, nullable=True)
     child_count = Column(Integer, nullable=True)   # 15세 이하
+    contact_phone = Column(String, nullable=True)  # 현장 연락처 (관리자가 연락할 때 사용)
     extra_info_updated_at = Column(DateTime, nullable=True)
 
     # 입실 전날 이용안내(메일+슬랙), 퇴실일 오전 퇴실체크 링크(슬랙) 발송 여부 — 중복 발송 방지

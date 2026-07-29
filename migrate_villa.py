@@ -91,6 +91,9 @@ SQL_COMMANDS = [
     "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS checkout_checklist_notes TEXT;",
     "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS checkout_checklist_submitted_at TIMESTAMP;",
 
+    # 확정 후 추가 입력사항에 현장 연락처 추가
+    "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS contact_phone VARCHAR;",
+
     # 3. 별장 시설 시드 (정원 20명)
     """
     INSERT INTO facilities (name, type, capacity)
