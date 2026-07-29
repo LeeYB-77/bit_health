@@ -50,11 +50,12 @@ def _admin(make_user):
 @pytest.fixture
 def isolate_current_round(db):
     """
-    스케줄러는 실행할 때마다 현재 대상월 회차를 자동 생성한다.
-    오늘이 월말에 가까우면 그 회차가 마감 임박 리마인더를 발생시켜,
+    스케줄러는 실행할 때마다 현재 대상월과 그 직전 달(선착순 대상) 회차를 자동 생성한다.
+    오늘이 월말에 가까우면 대상월 회차가 마감 임박 리마인더를 발생시키고,
+    직전 달은 새로 생성되자마자 마감·통보까지 같은 실행에서 끝나버려,
     알림 건수를 세는 테스트가 '오늘이 며칠이냐'에 따라 흔들린다.
     (실제로 7/27에는 통과하다가 7/28에 깨졌다.)
-    미리 플래그를 세운 상태로 만들어 두어 검사 대상에서 제외한다.
+    둘 다 이미 처리 끝난 상태로 미리 만들어 두어 검사 대상에서 제외한다.
     """
     year, month = _target_month()
     apply_start, apply_end, notify_date = villa_router.apply_window_for_target(year, month)
@@ -62,6 +63,15 @@ def isolate_current_round(db):
         target_year=year, target_month=month,
         apply_start=apply_start, apply_end=apply_end, notify_date=notify_date,
         status="open", reminder_sent=True, notify_warning_sent=True,
+    ))
+
+    prev_year, prev_month = villa_router.shift_month(year, month, -1)
+    db.add(models.VillaBookingRound(
+        target_year=prev_year, target_month=prev_month,
+        apply_start=date(prev_year, prev_month, 1),
+        apply_end=date(prev_year, prev_month, 1),
+        notify_date=date(prev_year, prev_month, 1),
+        status="notified", reminder_sent=True, notify_warning_sent=True,
     ))
     db.commit()
 
@@ -178,20 +188,44 @@ def test_달력이_신청_방식을_알려준다(client, db, facilities, make_us
 
 # --- 회차 자동 전이 ---
 
-def test_현재_대상월_회차를_미리_생성(db):
+def test_현재_대상월과_직전달_회차를_미리_생성(db):
     assert db.query(models.VillaBookingRound).count() == 0
     villa_scheduler.run(db)
 
-    rounds = db.query(models.VillaBookingRound).all()
-    assert len(rounds) == 1
-    assert (rounds[0].target_year, rounds[0].target_month) == _target_month()
+    pairs = {(r.target_year, r.target_month) for r in db.query(models.VillaBookingRound).all()}
+    assert pairs == {_target_month(), _target_month(-1)}
 
 
 def test_회차_생성은_멱등(db):
     villa_scheduler.run(db)
     villa_scheduler.run(db)
     villa_scheduler.run(db)
+    assert db.query(models.VillaBookingRound).count() == 2
+
+
+def test_직전달_회차가_누락됐어도_한_번의_실행으로_선착순_복구(db):
+    """
+    스케줄러가 한 달 이상 멈췄다 복구되는 상황을 재현한다. 대상월 회차만 있고
+    그 직전 달(원래 선착순으로 열려 있어야 할 달) 회차가 아예 없을 때,
+    다음 실행에서 회차가 생성되자마자 마감·통보까지 같은 실행 안에서 끝나
+    바로 선착순이 열려야 한다.
+    """
+    ty, tm = _target_month()
+    _make_round(
+        db, ty, tm,
+        apply_end=villa_router.apply_window_for_target(ty, tm)[1],
+        notify_date=villa_router.apply_window_for_target(ty, tm)[2],
+        status="open",
+    )
     assert db.query(models.VillaBookingRound).count() == 1
+
+    villa_scheduler.run(db)
+
+    py, pm = _target_month(-1)
+    prev_round = db.query(models.VillaBookingRound).filter_by(
+        target_year=py, target_month=pm,
+    ).one()
+    assert prev_round.status == "notified"
 
 
 def test_마감일_지난_회차는_closed(db):

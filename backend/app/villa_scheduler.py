@@ -22,9 +22,18 @@ def _pending_count(db: Session, round_id: int) -> int:
 
 
 def ensure_current_round(db: Session, today):
-    """현재 대상월 회차를 미리 만들어 둔다. get_or_create이므로 멱등하다."""
+    """
+    현재 대상월과 그 직전 달(선착순 오픈 대상) 회차를 미리 만들어 둔다. get_or_create이므로 멱등하다.
+    직전 달 회차까지 함께 보장해 두어야, 서버가 한 달가량 멈췄다 복구되는 경우에도
+    그 달 회차가 아예 생성되지 못해 영영 닫힌 채로 남는 일이 없다. 회차가 새로 생성돼도
+    apply_end·notify_date가 이미 지난 값이면 뒤이은 close_expired_rounds/notify_due_rounds가
+    같은 실행 안에서 바로 closed·notified까지 처리한다.
+    """
     year, month = villa_router.target_month_for_date(today)
     villa_router.get_or_create_round(db, year, month)
+
+    prev_year, prev_month = villa_router.shift_month(year, month, -1)
+    villa_router.get_or_create_round(db, prev_year, prev_month)
 
 
 def close_expired_rounds(db: Session, today) -> int:
