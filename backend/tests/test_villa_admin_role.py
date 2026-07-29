@@ -194,6 +194,21 @@ def test_별장_위임_담당자도_신청알림을_받는다(client, facilities
     assert "villamgr@bit.kr" in recipients
 
 
+def test_위임_담당자가_있으면_전체_관리자는_알림에서_빠진다(client, facilities, make_user, auth_headers, captured):
+    """위임 관리자를 지정한 목적 자체가 전체 관리자의 알림 부담을 더는 것이므로,
+    위임 관리자가 있으면 전체 관리자는 더 이상 비트별장 알림을 받지 않는다."""
+    _sysadmin(make_user)
+    manager = _villa_manager(make_user)
+    applicant = make_user(email="kim@bit.kr")
+    start, end = _in_target_month(10), _in_target_month(12)
+
+    client.post("/api/villa/apply", headers=auth_headers(applicant),
+               json=_payload(facilities["cheongpyeong"].id, start, end))
+
+    recipients = {m["to"] for m in captured["mail"]}
+    assert recipients == {"villamgr@bit.kr"}
+
+
 def test_위임_담당자만_있고_전체관리자는_이메일없으면_담당자에게만(client, db, make_user, facilities, auth_headers, captured):
     make_user(role="admin", email=None)  # 이메일 없는 전체 관리자 — 알림 불가 대상
     manager = _villa_manager(make_user)

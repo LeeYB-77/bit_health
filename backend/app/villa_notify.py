@@ -2,7 +2,6 @@
 import logging
 import os
 
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from . import email_utils, slack_utils
@@ -166,14 +165,22 @@ def notify_cancel_approved(db: Session, reservation) -> bool:
 
 def villa_admin_recipients(db: Session):
     """
-    비트별장 관리 알림을 받을 대상. 시스템 전체 관리자(role='admin')와 별장만
-    위임받은 담당자(is_villa_admin)의 합집합이다. 위임 담당자를 지정하지 않은
-    환경에서는 전체 관리자만 남아 기존 동작과 동일하다(안전한 기본값).
+    비트별장 관리 알림을 받을 대상. 별장 위임 관리자가 지정돼 있으면 그 담당자만
+    받는다 — 전체 관리자의 알림 부담을 줄이려고 위임하는 것이므로, 위임 후에도
+    전체 관리자에게 계속 보내면 위임의 의미가 없다. 위임 담당자가 없으면(아직
+    지정하지 않았거나 전부 해제된 경우) 안전한 기본값으로 전체 관리자에게 보낸다.
     """
     from . import models  # 순환 import를 피해 함수 안에서 가져온다
 
+    villa_managers = db.query(models.User).filter(
+        models.User.is_villa_admin == True,
+        models.User.email.isnot(None),
+    ).all()
+    if villa_managers:
+        return villa_managers
+
     return db.query(models.User).filter(
-        or_(models.User.role == "admin", models.User.is_villa_admin == True),
+        models.User.role == "admin",
         models.User.email.isnot(None),
     ).all()
 
