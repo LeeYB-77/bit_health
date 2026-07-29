@@ -152,12 +152,18 @@ def run_migration():
 
     failed = 0
     for i, sql in enumerate(SQL_COMMANDS, start=1):
-        # 개행을 공백으로 눌러 한 줄 명령으로 전달한다.
         flat = " ".join(sql.split())
-        cmd = f"docker exec bit_health_db psql -U bit_health_user -d bit_health_db -c \"{flat}\""
         print(f"[{i}/{len(SQL_COMMANDS)}] {flat[:70]}...")
 
-        stdin, stdout, stderr = ssh.exec_command(cmd)
+        # SQL을 -c "..." 쉘 인자로 넘기면, SQL 안의 JSON 큰따옴표가 바깥 쉘의
+        # 큰따옴표와 충돌해 명령이 깨진다(실제로 겪은 문제 — 조용히 성공한 것처럼
+        # 보이지만 값이 깨져 들어간다). stdin으로 그대로 흘려보내면 쉘 인용 문제
+        # 자체가 없다.
+        stdin, stdout, stderr = ssh.exec_command(
+            "docker exec -i bit_health_db psql -U bit_health_user -d bit_health_db -v ON_ERROR_STOP=1"
+        )
+        stdin.write(sql)
+        stdin.channel.shutdown_write()
         exit_code = stdout.channel.recv_exit_status()
         out = stdout.read().decode("utf-8", errors="replace").strip()
         err = stderr.read().decode("utf-8", errors="replace").strip()
@@ -165,7 +171,10 @@ def run_migration():
         if out:
             print(f"    → {out}")
         if err:
-            print(f"    [오류] {err}")
+            # ON_ERROR_STOP=1이라 NOTICE 등 정보성 메시지도 stderr로 오지만 exit_code는 0이다.
+            # 실제 실패 여부는 exit_code로만 판단한다.
+            print(f"    [{'오류' if exit_code != 0 else '알림'}] {err}")
+        if exit_code != 0:
             failed += 1
 
     print("\n[확인] 생성된 별장 시설")
