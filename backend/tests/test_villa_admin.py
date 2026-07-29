@@ -52,6 +52,18 @@ def test_겹치지_않는_신청은_별도_그룹(client, db, facilities, make_u
     assert all(g["contested"] is False for g in body["groups"])
 
 
+def test_신청현황은_대상월과_다른_달도_모두_보인다(client, db, facilities, make_user, auth_headers):
+    """대기 신청은 페이지에 표시 중인 달(year/month 파라미터)과 무관하게 전부 노출돼야 한다."""
+    villa = facilities["cheongpyeong"]
+    _seed(db, make_user(name="이번달"), villa, _in_target_month(10), _in_target_month(12))
+    _seed(db, make_user(name="다음달"), villa, _in_target_month(10, 1), _in_target_month(12, 1))
+
+    body = client.get("/api/villa/admin/applications", headers=auth_headers(_admin(make_user))).json()
+    names = {a["user_name"] for g in body["groups"] for a in g["applications"]}
+    assert names == {"이번달", "다음달"}
+    assert body["pending_total"] == 2
+
+
 def test_체인_겹침은_연결요소로_묶임(client, db, facilities, make_user, auth_headers):
     """A(10~12) - B(11~13) - C(12~14): A와 C는 안 겹치지만 B를 통해 한 덩어리다."""
     villa = facilities["cheongpyeong"]
@@ -71,6 +83,37 @@ def test_다른_별장은_그룹이_분리됨(client, db, facilities, make_user,
     body = client.get("/api/villa/admin/applications", headers=auth_headers(_admin(make_user))).json()
     assert len(body["groups"]) == 2
     assert {g["facility_name"] for g in body["groups"]} == {"청평별장", "동비재"}
+
+
+def test_통보대기건수는_해당_회차만_센다(client, db, facilities, make_user, auth_headers):
+    """
+    confirmed 목록이 더 이상 달로 좁혀지지 않으므로, 통보 대상 건수는 반드시
+    round_id로 직접 세야 한다. 다른 회차의 확정 건이 섞여 잘못 커지면 안 된다.
+    """
+    villa = facilities["cheongpyeong"]
+    ty, tm = _target_month()
+    current_round = villa_router.get_or_create_round(db, ty, tm)
+
+    other_round = models.VillaBookingRound(
+        target_year=2020, target_month=3,
+        apply_start=date(2020, 1, 1), apply_end=date(2020, 1, 31), notify_date=date(2020, 1, 31),
+        status="notified",
+    )
+    db.add(other_round)
+    db.commit()
+
+    # 다른 회차에 속한, 아직 통보 안 된 확정 건 — 이게 섞이면 버그다.
+    other = _seed(db, make_user(name="다른회차"), villa, date(2020, 3, 10), date(2020, 3, 12), status="confirmed")
+    other.round_id = other_round.id
+    other.notified_confirmed = False
+
+    mine = _seed(db, make_user(name="이번회차"), villa, _in_target_month(10), _in_target_month(12), status="confirmed")
+    mine.round_id = current_round.id
+    mine.notified_confirmed = False
+    db.commit()
+
+    body = client.get("/api/villa/admin/applications", headers=auth_headers(_admin(make_user))).json()
+    assert body["unnotified_count"] == 1
 
 
 def test_이용이력_횟수가_함께_제공됨(client, db, facilities, make_user, auth_headers):

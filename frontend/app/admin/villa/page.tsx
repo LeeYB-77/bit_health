@@ -1,9 +1,10 @@
 'use client';
 // 비트별장 관리자 화면. 중복 경합 신청을 나란히 비교해 확정하고, 취소 요청을 승인·반려한다.
+// 예약 현황은 이번달·선착순예약월·예약신청대상월 3개월 달력으로 한눈에 보여준다.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { API_URL } from '@/lib/api';
+import { API_URL, getVillas, Villa } from '@/lib/api';
 import { AlertTriangle, ArrowLeft, Calendar, Check, Loader2, Send, Users, X } from 'lucide-react';
 
 interface Application {
@@ -22,8 +23,14 @@ interface Application {
     checkout_time_forced: boolean;
     participant_count: number;
     status: string;
+    booking_type: string;
     created_at: string;
     usage_count: number;
+    vehicle_count: number | null;
+    vehicle_numbers: string | null;
+    adult_count: number | null;
+    child_count: number | null;
+    cancel_reason: string | null;
 }
 
 interface Group {
@@ -79,30 +86,146 @@ async function call(path: string, method: 'GET' | 'POST' = 'GET') {
     return body;
 }
 
+// --- 날짜 헬퍼 (frontend/app/villa/page.tsx와 동일한 규칙) ---
+const toISO = (d: Date) => {
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${m}-${day}`;
+};
+
+const parseISO = (s: string) => {
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d);
+};
+
+const addDays = (d: Date, n: number) => {
+    const next = new Date(d);
+    next.setDate(next.getDate() + n);
+    return next;
+};
+
 const shiftMonth = (year: number, month: number, delta: number) => {
     const i = year * 12 + (month - 1) + delta;
     return { year: Math.floor(i / 12), month: (i % 12) + 1 };
 };
 
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
+const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
+    confirmed: { label: '확정', cls: 'bg-blue-100 text-blue-700' },
+    cancel_requested: { label: '취소 요청중', cls: 'bg-orange-100 text-orange-700' },
+    applied: { label: '신청중', cls: 'bg-amber-100 text-amber-700' },
+};
+
+type DayEntry = { confirmed?: Application; pending: Application[] };
+
+/** 한 달의 날짜별 점유 현황 맵. 점유 구간은 [체크인, 체크아웃)로 체크아웃 날은 비운다. */
+function buildOccupancy(items: Application[], facilityId: number): Map<string, DayEntry> {
+    const map = new Map<string, DayEntry>();
+    for (const item of items) {
+        if (item.facility_id !== facilityId) continue;
+        const end = parseISO(item.end_date);
+        for (let d = parseISO(item.start_date); d < end; d = addDays(d, 1)) {
+            const key = toISO(d);
+            const entry = map.get(key) ?? { pending: [] };
+            if (item.status === 'confirmed' || item.status === 'cancel_requested') {
+                entry.confirmed = item;
+            } else {
+                entry.pending.push(item);
+            }
+            map.set(key, entry);
+        }
+    }
+    return map;
+}
+
+function MiniMonth({
+    label, year, month, occupancy, onSelect,
+}: {
+    label: string; year: number; month: number;
+    occupancy: Map<string, DayEntry>;
+    onSelect: (entry: DayEntry) => void;
+}) {
+    const grid = useMemo(() => {
+        const leading = new Date(year, month - 1, 1).getDay();
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const cells: (Date | null)[] = Array(leading).fill(null);
+        for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month - 1, d));
+        while (cells.length % 7 !== 0) cells.push(null);
+        return cells;
+    }, [year, month]);
+
+    return (
+        <div className="rounded-xl border border-gray-100 p-2.5">
+            <p className="text-xs font-bold text-gray-700 mb-2">{label} · {year}년 {month}월</p>
+            <div className="grid grid-cols-7 gap-0.5 text-center">
+                {WEEKDAYS.map((w, i) => (
+                    <div key={w} className={`text-[9px] font-bold py-0.5 ${
+                        i === 0 ? 'text-rose-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'
+                    }`}>
+                        {w}
+                    </div>
+                ))}
+                {grid.map((cell, idx) => {
+                    if (!cell) return <div key={`e${idx}`} />;
+                    const iso = toISO(cell);
+                    const entry = occupancy.get(iso);
+                    const bar = entry?.confirmed ?? entry?.pending[0];
+                    const isBarStart = bar ? bar.start_date === iso : false;
+
+                    return (
+                        <button
+                            key={iso}
+                            disabled={!bar}
+                            onClick={() => entry && onSelect(entry)}
+                            className={`relative aspect-square flex flex-col items-center justify-start rounded text-[10px] pt-0.5 ${
+                                bar ? 'hover:ring-1 hover:ring-blue-300 cursor-pointer' : ''
+                            }`}
+                        >
+                            <span className="text-gray-700">{cell.getDate()}</span>
+                            {bar && (
+                                <span
+                                    className={`w-full h-1 rounded-full mt-0.5 ${
+                                        entry?.confirmed ? 'bg-blue-500' : 'bg-amber-400'
+                                    }`}
+                                />
+                            )}
+                            {bar && isBarStart && (
+                                <span className="text-[8px] leading-tight text-gray-600 truncate w-full px-0.5">
+                                    {bar.user_name}
+                                    {!entry?.confirmed && entry && entry.pending.length > 1 && ` +${entry.pending.length - 1}`}
+                                </span>
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
 export default function AdminVillaPage() {
     const router = useRouter();
     const [data, setData] = useState<ApplicationsResponse | null>(null);
     const [cancels, setCancels] = useState<CancelRequest[]>([]);
-    const [view, setView] = useState<{ year: number; month: number } | null>(null);
+    const [villas, setVillas] = useState<Villa[]>([]);
+    const [selectedVillaId, setSelectedVillaId] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState<number | null>(null);
     const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+    const [detail, setDetail] = useState<DayEntry | null>(null);
 
-    const load = useCallback(async (target?: { year: number; month: number }) => {
+    const load = useCallback(async () => {
         try {
-            const query = target ? `?year=${target.year}&month=${target.month}` : '';
-            const [apps, cancelList] = await Promise.all([
-                call(`/api/villa/admin/applications${query}`),
+            const [apps, cancelList, villaList] = await Promise.all([
+                call('/api/villa/admin/applications'),
                 call('/api/villa/admin/cancel-requests'),
+                getVillas(),
             ]);
             setData(apps);
             setCancels(cancelList);
-            setView({ year: apps.year, month: apps.month });
+            setVillas(villaList);
+            setSelectedVillaId(prev => prev ?? villaList[0]?.id ?? null);
         } catch (e) {
             setMessage({ type: 'err', text: e instanceof Error ? e.message : '불러오지 못했습니다.' });
         } finally {
@@ -118,7 +241,7 @@ export default function AdminVillaPage() {
         try {
             const body = await call(path, 'POST');
             setMessage({ type: 'ok', text: body.message || okText });
-            await load(view ?? undefined);
+            await load();
         } catch (e) {
             setMessage({ type: 'err', text: e instanceof Error ? e.message : '처리에 실패했습니다.' });
         } finally {
@@ -126,41 +249,44 @@ export default function AdminVillaPage() {
         }
     };
 
+    // 정규예약 대상월(data.year/month) 기준으로 세 달을 계산한다.
+    const months = useMemo(() => {
+        if (!data) return null;
+        const target = { year: data.year, month: data.month };
+        const open = shiftMonth(data.year, data.month, -1);
+        const today = new Date();
+        const current = { year: today.getFullYear(), month: today.getMonth() + 1 };
+        return { current, open, target };
+    }, [data]);
+
+    const pendingFlat = useMemo(() => data?.groups.flatMap(g => g.applications) ?? [], [data]);
+    const calendarItems = useMemo(() => [...(data?.confirmed ?? []), ...pendingFlat], [data, pendingFlat]);
+
+    // 요약 카드의 '확정' 수치는 방금 만든 3개월 달력과 눈높이를 맞춘다(전체 누적이면 의미가 옅어진다).
+    const confirmedInRange = useMemo(() => {
+        if (!data || !months) return 0;
+        const inRange = [months.current, months.open, months.target];
+        return data.confirmed.filter(c => {
+            const cy = Number(c.start_date.slice(0, 4));
+            const cm = Number(c.start_date.slice(5, 7));
+            return inRange.some(m => m.year === cy && m.month === cm);
+        }).length;
+    }, [data, months]);
+
     if (loading) {
         return <div className="p-8 text-center text-gray-500">불러오는 중...</div>;
     }
 
     return (
         <div className="space-y-6 px-4 sm:px-0">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={() => router.push('/admin')}
-                        className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-500"
-                    >
-                        <ArrowLeft size={20} />
-                    </button>
-                    <h2 className="text-xl font-bold text-gray-900">비트별장 예약 관리</h2>
-                </div>
-                {view && (
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={() => load(shiftMonth(view.year, view.month, -1))}
-                            className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50"
-                        >
-                            이전 달
-                        </button>
-                        <span className="font-bold text-gray-700 min-w-28 text-center">
-                            {view.year}년 {view.month}월
-                        </span>
-                        <button
-                            onClick={() => load(shiftMonth(view.year, view.month, 1))}
-                            className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50"
-                        >
-                            다음 달
-                        </button>
-                    </div>
-                )}
+            <div className="flex items-center gap-3">
+                <button
+                    onClick={() => router.push('/admin')}
+                    className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-500"
+                >
+                    <ArrowLeft size={20} />
+                </button>
+                <h2 className="text-xl font-bold text-gray-900">비트별장 예약 관리</h2>
             </div>
 
             {message && (
@@ -227,7 +353,7 @@ export default function AdminVillaPage() {
                     {[
                         { label: '대기 신청', value: data.pending_total, cls: 'text-amber-600' },
                         { label: '경합 그룹', value: data.contested_groups, cls: 'text-rose-600' },
-                        { label: '확정', value: data.confirmed.length, cls: 'text-blue-600' },
+                        { label: '확정 (아래 3개월)', value: confirmedInRange, cls: 'text-blue-600' },
                     ].map(s => (
                         <div key={s.label} className="rounded-2xl bg-white p-4 shadow-sm border border-gray-100">
                             <p className="text-xs text-gray-400">{s.label}</p>
@@ -267,7 +393,57 @@ export default function AdminVillaPage() {
                 </section>
             )}
 
-            {/* 신청 그룹 */}
+            {/* 예약 현황 달력: 이번달 · 선착순예약월 · 예약신청대상월 */}
+            {months && villas.length > 0 && (
+                <section className="rounded-2xl bg-white p-5 shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                            <Calendar size={16} className="text-blue-600" /> 예약 현황
+                        </h3>
+                        <div className="flex gap-1.5">
+                            {villas.map(v => (
+                                <button
+                                    key={v.id}
+                                    onClick={() => setSelectedVillaId(v.id)}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                                        v.id === selectedVillaId
+                                            ? 'bg-blue-600 text-white'
+                                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                    }`}
+                                >
+                                    {v.name}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {selectedVillaId && (() => {
+                        const occupancy = buildOccupancy(calendarItems, selectedVillaId);
+                        return (
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <MiniMonth label="이번달" year={months.current.year} month={months.current.month}
+                                    occupancy={occupancy} onSelect={setDetail} />
+                                <MiniMonth label="선착순예약월" year={months.open.year} month={months.open.month}
+                                    occupancy={occupancy} onSelect={setDetail} />
+                                <MiniMonth label="예약신청대상월" year={months.target.year} month={months.target.month}
+                                    occupancy={occupancy} onSelect={setDetail} />
+                            </div>
+                        );
+                    })()}
+
+                    <div className="flex items-center justify-center gap-4 mt-3 pt-3 border-t border-gray-100 text-[11px] text-gray-500">
+                        <span className="flex items-center gap-1.5">
+                            <span className="w-3 h-1 rounded-full bg-blue-500" /> 확정
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                            <span className="w-3 h-1 rounded-full bg-amber-400" /> 신청중
+                        </span>
+                        <span>날짜를 클릭하면 예약 정보를 볼 수 있습니다</span>
+                    </div>
+                </section>
+            )}
+
+            {/* 신청 그룹 — 페이지에 표시 중인 달과 무관하게 전체를 보여준다 */}
             <section className="space-y-4">
                 <h3 className="font-bold text-gray-800 flex items-center gap-2">
                     <Users size={18} className="text-blue-600" /> 신청 현황
@@ -352,43 +528,73 @@ export default function AdminVillaPage() {
                 ))}
             </section>
 
-            {/* 확정 목록 */}
-            {data && data.confirmed.length > 0 && (
-                <section className="rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="bg-blue-50 px-5 py-3 border-b border-blue-100">
-                        <h3 className="font-bold text-blue-800">확정된 예약 {data.confirmed.length}건</h3>
-                    </div>
-                    <ul className="divide-y divide-gray-100">
-                        {data.confirmed.map(c => (
-                            <li key={c.id} className="p-4 flex items-center justify-between gap-4 flex-wrap">
-                                <div>
-                                    <p className="font-bold text-gray-800">
-                                        {c.user_name}
-                                        {c.user_dept && <span className="text-gray-400 font-normal"> · {c.user_dept}</span>}
-                                    </p>
-                                    <p className="text-sm text-gray-600 mt-0.5">
-                                        {c.facility_name} · {c.start_date} ~ {c.end_date} ({c.nights}박) · {c.participant_count}명
-                                    </p>
-                                    <p className="text-xs text-gray-400 mt-0.5">
-                                        {c.checkin_time} 입실{c.checkin_time_forced && (
-                                            <span className="ml-1 text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">정규</span>
-                                        )}
-                                        {' '}/ {c.checkout_time} 퇴실{c.checkout_time_forced && (
-                                            <span className="ml-1 text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">정규</span>
-                                        )}
-                                    </p>
+            {/* 예약 상세 모달 (달력에서 날짜 클릭) */}
+            {detail && (
+                <div
+                    className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                    onClick={() => setDetail(null)}
+                >
+                    <div
+                        className="bg-white w-full max-w-md rounded-3xl p-5 shadow-2xl max-h-[85vh] overflow-y-auto space-y-3"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between">
+                            <h2 className="font-bold text-gray-900">예약 정보</h2>
+                            <button
+                                onClick={() => setDetail(null)}
+                                className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        {[detail.confirmed, ...detail.pending].filter((a): a is Application => !!a).map(a => (
+                            <div key={a.id} className="rounded-2xl border border-gray-100 p-4 text-sm space-y-1.5">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-bold text-gray-900">{a.user_name}</span>
+                                    {a.user_dept && <span className="text-gray-400">{a.user_dept}</span>}
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${STATUS_LABEL[a.status]?.cls ?? 'bg-gray-100 text-gray-600'}`}>
+                                        {STATUS_LABEL[a.status]?.label ?? a.status}
+                                    </span>
                                 </div>
-                                <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
-                                    c.status === 'cancel_requested'
-                                        ? 'bg-orange-100 text-orange-700'
-                                        : 'bg-blue-100 text-blue-700'
-                                }`}>
-                                    {c.status === 'cancel_requested' ? '취소 요청중' : '확정'}
-                                </span>
-                            </li>
+                                <p className="text-gray-600">{a.facility_name} · {a.start_date} ~ {a.end_date} ({a.nights}박)</p>
+                                <p className="text-gray-500 flex items-center flex-wrap gap-x-1">
+                                    <span>
+                                        {a.checkin_time} 입실
+                                        {a.checkin_time_forced && (
+                                            <span className="ml-1 text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">정규시간</span>
+                                        )}
+                                    </span>
+                                    <span>·</span>
+                                    <span>
+                                        {a.checkout_time} 퇴실
+                                        {a.checkout_time_forced && (
+                                            <span className="ml-1 text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">정규시간</span>
+                                        )}
+                                    </span>
+                                </p>
+                                <p className="text-gray-500">
+                                    인원 {a.participant_count}명
+                                    {(a.adult_count != null || a.child_count != null) && (
+                                        <> (성인 {a.adult_count ?? '-'} · 아동 {a.child_count ?? '-'})</>
+                                    )}
+                                </p>
+                                <p className="text-gray-500">
+                                    차량 {a.vehicle_count != null ? `${a.vehicle_count}대` : '미입력'}
+                                    {a.vehicle_numbers && ` (${a.vehicle_numbers})`}
+                                </p>
+                                <p className="text-xs text-gray-400">
+                                    최근 1년 {a.usage_count}회 이용 · 신청 {a.created_at ? new Date(a.created_at).toLocaleString('ko-KR') : '-'}
+                                </p>
+                                {a.cancel_reason && (
+                                    <p className="text-xs text-orange-600 bg-orange-50 rounded-lg px-2 py-1">
+                                        취소 사유: {a.cancel_reason}
+                                    </p>
+                                )}
+                            </div>
                         ))}
-                    </ul>
-                </section>
+                    </div>
+                </div>
             )}
         </div>
     );

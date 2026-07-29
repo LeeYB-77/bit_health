@@ -752,6 +752,12 @@ def _serialize_application(r, usage_counts):
         "booking_type": r.booking_type,
         "created_at": r.created_at,
         "usage_count": usage_counts.get(r.user_id, 0),
+        # 확정 후 추가 입력사항 — 관리자가 예약 상세를 볼 때 함께 보여준다.
+        "vehicle_count": r.vehicle_count,
+        "vehicle_numbers": r.vehicle_numbers,
+        "adult_count": r.adult_count,
+        "child_count": r.child_count,
+        "cancel_reason": r.cancel_reason,
     }
 
 
@@ -824,22 +830,17 @@ def list_applications(
     db: Session = Depends(get_db),
 ):
     """
-    대상월의 신청 현황. 겹치는 신청끼리 묶어 경합 그룹으로 반환한다.
-    year/month를 생략하면 현재 접수중인 대상월을 쓴다.
+    전체 신청 현황. 겹치는 신청끼리 묶어 경합 그룹으로 반환한다. 대기 신청은
+    관리자가 회차를 오가며 놓치지 않도록 기간 제한 없이 전부 보여준다.
+    year/month는 어떤 회차(대상월) 정보를 함께 내려줄지에만 쓰인다 — 생략하면
+    현재 접수중인 대상월 회차를 쓴다.
     """
     if year is None or month is None:
         year, month = target_month_for_date(datetime.now().date())
     if not 1 <= month <= 12:
         raise HTTPException(status_code=400, detail="month는 1~12 사이여야 합니다.")
 
-    month_first = date(year, month, 1)
-    ny, nm = shift_month(year, month, 1)
-    next_month_first = date(ny, nm, 1)
-
-    base = db.query(models.VillaReservation).filter(
-        models.VillaReservation.start_date >= month_first,
-        models.VillaReservation.start_date < next_month_first,
-    )
+    base = db.query(models.VillaReservation)
     if facility_id:
         base = base.filter(models.VillaReservation.facility_id == facility_id)
 
@@ -870,8 +871,16 @@ def list_applications(
         models.VillaBookingRound.target_year == year,
         models.VillaBookingRound.target_month == month,
     ).first()
-    not_yet_notified = sum(
-        1 for r in confirmed if r.status == "confirmed" and not r.notified_confirmed
+    # 통보 대상 건수는 "이 회차에 속한" 확정 건 기준이어야 한다. confirmed는 더 이상
+    # 기간으로 좁혀지지 않으므로(전체 조회) 회차 무관 데이터가 섞이지 않도록 round_id로 직접 센다.
+    not_yet_notified = (
+        db.query(models.VillaReservation)
+        .filter(
+            models.VillaReservation.round_id == booking_round.id,
+            models.VillaReservation.status == "confirmed",
+            models.VillaReservation.notified_confirmed == False,
+        ).count()
+        if booking_round else 0
     )
 
     return {
