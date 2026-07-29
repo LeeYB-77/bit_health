@@ -79,7 +79,10 @@ export default function Home() {
           <div className="flex items-center gap-1">
             {(userRole === 'admin' || isVillaAdmin) && (
               <button
-                onClick={() => router.push('/admin')}
+                // 별장만 위임 관리하는 담당자는 대시보드를 거치지 않고 바로 비트별장
+                // 관리 화면으로 보낸다. /admin으로 갔다가 layout에서 다시 튕겨나가는
+                // 한 박자 늦은 리다이렉트를 피한다.
+                onClick={() => router.push(userRole === 'admin' ? '/admin' : '/admin/villa')}
                 className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors flex items-center gap-1"
                 title="관리자 페이지"
               >
