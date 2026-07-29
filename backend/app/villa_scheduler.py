@@ -1,6 +1,6 @@
 # 비트별장 회차의 날짜 기반 전이(생성·마감·통보)를 처리하는 스케줄러 작업
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,10 @@ logger = logging.getLogger(__name__)
 
 # 접수 마감 며칠 전에 관리자에게 리마인더를 보낼지
 REMINDER_DAYS_BEFORE = 3
+
+# 퇴실 체크사항은 퇴실일 이 시각(정각) 무렵에만 보낸다. 스케줄러는 매시 5분에 돌므로
+# 이 시간대의 실행에서만 대상이 된다.
+CHECKOUT_REMINDER_HOUR = 7
 
 
 def _pending_count(db: Session, round_id: int) -> int:
@@ -111,13 +115,48 @@ def notify_due_rounds(db: Session, today) -> dict:
     return result
 
 
+def send_checkin_guides(db: Session, today) -> int:
+    """입실 전날, 확정된 예약자에게 이용안내 링크를 메일+슬랙으로 보낸다."""
+    tomorrow = today + timedelta(days=1)
+    reservations = db.query(models.VillaReservation).filter(
+        models.VillaReservation.status == "confirmed",
+        models.VillaReservation.start_date == tomorrow,
+        models.VillaReservation.checkin_guide_sent == False,
+    ).all()
+
+    for reservation in reservations:
+        villa_notify.notify_checkin_guide(db, reservation)
+        reservation.checkin_guide_sent = True
+    return len(reservations)
+
+
+def send_checkout_reminders(db: Session, today, hour: int) -> int:
+    """퇴실일 오전 7시 무렵, 확정된 예약자에게 퇴실 체크사항 링크를 슬랙으로만 보낸다."""
+    if hour != CHECKOUT_REMINDER_HOUR:
+        return 0
+
+    reservations = db.query(models.VillaReservation).filter(
+        models.VillaReservation.status == "confirmed",
+        models.VillaReservation.end_date == today,
+        models.VillaReservation.checkout_reminder_sent == False,
+    ).all()
+
+    for reservation in reservations:
+        villa_notify.notify_checkout_reminder(db, reservation)
+        reservation.checkout_reminder_sent = True
+    return len(reservations)
+
+
 def run(db: Session) -> dict:
     """날짜 기반 작업을 한 번 실행한다. 모든 단계가 멱등하도록 플래그로 보호된다."""
-    today = datetime.now().date()
+    now = datetime.now()
+    today = now.date()
 
     ensure_current_round(db, today)
     closed = close_expired_rounds(db, today)
     reminders = send_deadline_reminders(db, today)
+    guides_sent = send_checkin_guides(db, today)
+    checkout_reminders_sent = send_checkout_reminders(db, today, now.hour)
 
     # SessionLocal이 autoflush=False라 앞 단계의 status 변경이 아직 DB 쿼리에 보이지 않는다.
     # flush하지 않으면 방금 closed로 바꾼 회차를 통보 단계가 놓쳐 한 주기를 더 기다리게 된다.
@@ -126,7 +165,13 @@ def run(db: Session) -> dict:
     notified = notify_due_rounds(db, today)
     db.commit()
 
-    return {"closed": closed, "reminders": reminders, **notified}
+    return {
+        "closed": closed,
+        "reminders": reminders,
+        "guides_sent": guides_sent,
+        "checkout_reminders_sent": checkout_reminders_sent,
+        **notified,
+    }
 
 
 def scheduled_job():

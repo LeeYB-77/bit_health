@@ -314,3 +314,67 @@ export const saveVillaExtraInfo = async (
     body: JSON.stringify(data),
   });
 };
+
+// --- 이용안내 (체크인 전날) ---
+
+export type VillaAccessStep = { icon: 'key' | 'bellhop' | 'bell' } | { code: string };
+
+export interface VillaAccessLine {
+  label: string;
+  steps?: VillaAccessStep[];
+  plain?: string;
+}
+
+export interface VillaGuide {
+  reservation: {
+    id: number;
+    facility_name: string | null;
+    start_date: string;
+    end_date: string;
+    checkin_time: string | null;
+    checkout_time: string | null;
+    participant_count: number;
+  };
+  address: string;
+  address_note: string;
+  access: VillaAccessLine[];
+  notes: string[];
+  wifi: { network: string; password: string };
+  key_return_notice: string;
+  emergency_contact: string;
+}
+
+export const getVillaGuide = async (id: number): Promise<VillaGuide> => {
+  return fetcher(`/api/villa/${id}/guide`);
+};
+
+// --- 퇴실 체크사항 (체크아웃 당일) ---
+
+export interface VillaChecklistItem {
+  label: string;
+  sub: string | null;
+}
+
+export interface VillaCheckout {
+  reservation: { id: number; facility_name: string | null; start_date: string; end_date: string };
+  checklist: VillaChecklistItem[];
+  key_return_notice: string;
+  emergency_contact: string;
+  submitted: boolean;
+  checked: boolean[] | null;
+  notes: string | null;
+}
+
+export const getVillaCheckout = async (id: number): Promise<VillaCheckout> => {
+  return fetcher(`/api/villa/${id}/checkout`);
+};
+
+export const submitVillaCheckout = async (
+  id: number,
+  data: { checked: boolean[]; notes: string | null }
+): Promise<{ message: string }> => {
+  return fetcher(`/api/villa/${id}/checkout`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};

@@ -17,6 +17,26 @@ def extra_info_url(reservation_id: int) -> str:
     return f"{PUBLIC_BASE_URL.rstrip('/')}/villa/extra/{reservation_id}"
 
 
+def guide_url(reservation_id: int) -> str:
+    return f"{PUBLIC_BASE_URL.rstrip('/')}/villa/guide/{reservation_id}"
+
+
+def checkout_url(reservation_id: int) -> str:
+    return f"{PUBLIC_BASE_URL.rstrip('/')}/villa/checkout/{reservation_id}"
+
+
+# 1박 5만원, 이후 1박마다 3만원 추가 (예: 3박 = 5+3+3 = 11만원)
+FEE_FIRST_NIGHT = 50000
+FEE_EXTRA_NIGHT = 30000
+PAYMENT_ACCOUNT = "기업은행 592-027426-01-020 (예금주: 김다회)"
+
+
+def usage_fee(nights: int) -> int:
+    if nights < 1:
+        return 0
+    return FEE_FIRST_NIGHT + (nights - 1) * FEE_EXTRA_NIGHT
+
+
 def _villa_name(reservation) -> str:
     return reservation.facility.name if reservation.facility else "비트별장"
 
@@ -48,6 +68,21 @@ def _dispatch(db: Session, user, subject: str, slack_message: str, mail_body: st
     return slack_sent or mail_sent
 
 
+def _dispatch_slack_only(user, message: str) -> bool:
+    """Slack DM만 보낸다. 메일함이 아니라 현장에서 바로 봐야 하는 당일 알림에 쓴다."""
+    if not user or not user.email:
+        logger.warning("이메일이 없어 통보를 건너뜁니다.")
+        return False
+    try:
+        slack_user_id = slack_utils.get_slack_user_id_by_email(user.email)
+        if slack_user_id:
+            slack_utils.send_slack_dm(slack_user_id, message)
+            return True
+    except Exception as e:
+        logger.error(f"Slack 통보 실패 ({user.email}): {e}")
+    return False
+
+
 def _boundary_notice_lines(reservation) -> list:
     """
     앞뒤로 붙는 예약이 있어 정규 시간이 강제된 경우의 안내 문구.
@@ -68,12 +103,15 @@ def _boundary_notice_lines(reservation) -> list:
 
 
 def notify_confirmed(db: Session, reservation) -> bool:
-    """확정 통보. 차량·이용구성을 입력할 링크를 함께 보낸다."""
+    """확정 통보. 이용료 입금 안내와 차량·이용구성을 입력할 링크를 함께 보낸다."""
     villa = _villa_name(reservation)
     period = _period(reservation)
     link = extra_info_url(reservation.id)
     boundary_lines = _boundary_notice_lines(reservation)
     boundary_block = ("\n" + "\n".join(boundary_lines) + "\n") if boundary_lines else ""
+
+    nights = (reservation.end_date - reservation.start_date).days
+    fee = usage_fee(nights)
 
     slack_message = (
         f"🏡 *[비트별장 예약 확정 안내]*\n\n"
@@ -82,6 +120,10 @@ def notify_confirmed(db: Session, reservation) -> bool:
         f"• *입실/퇴실*: {reservation.checkin_time} / {reservation.checkout_time}\n"
         f"• *사용 인원*: {reservation.participant_count}명\n"
         f"{boundary_block}\n"
+        f"💰 *이용료 안내*\n"
+        f"• 이용료: {nights}박 {fee:,}원 (1박 5만원, 추가 1박당 3만원)\n"
+        f"• 입금 계좌: {PAYMENT_ACCOUNT}\n"
+        f"• 입금 기한: 예약 확정일로부터 3일 이내 필수\n\n"
         f"아래 링크에서 차량 정보와 이용 구성을 입력해 주세요.\n{link}"
     )
     mail_body = (
@@ -90,6 +132,10 @@ def notify_confirmed(db: Session, reservation) -> bool:
         f"- 입실/퇴실: {reservation.checkin_time} / {reservation.checkout_time}\n"
         f"- 사용 인원: {reservation.participant_count}명\n"
         f"{boundary_block}\n"
+        f"[이용료 안내]\n"
+        f"- 이용료: {nights}박 {fee:,}원 (1박 5만원, 추가 1박당 3만원)\n"
+        f"- 입금 계좌: {PAYMENT_ACCOUNT}\n"
+        f"- 입금 기한: 예약 확정일로부터 3일 이내 필수\n\n"
         f"아래 링크에서 차량 정보와 이용 구성(성인/아동)을 입력해 주세요.\n"
         f"{link}\n\n"
         f"링크 접속에는 사내 SSO 로그인이 필요하며, 본인 예약만 조회됩니다.\n"
@@ -128,6 +174,70 @@ def notify_boundary_time_forced(db: Session, reservation, side: str) -> bool:
         f"{detail.replace('*', '')}\n"
     )
     return _dispatch(db, reservation.user, f"[BIT] {villa} {title}", slack_message, mail_body)
+
+
+def notify_checkin_guide(db: Session, reservation) -> bool:
+    """입실 전날 발송하는 이용안내 링크. 출입방법·와이파이 등은 별장마다 달라 페이지로 연결한다."""
+    villa = _villa_name(reservation)
+    period = _period(reservation)
+    link = guide_url(reservation.id)
+
+    slack_message = (
+        f"🏡 *[{villa} 이용안내]*\n\n"
+        f"내일부터 예약하신 *{villa}* 이용이 시작됩니다.\n"
+        f"• *이용 기간*: {period}\n\n"
+        f"출입방법·와이파이 등 이용안내를 아래 링크에서 확인해 주세요.\n{link}"
+    )
+    mail_body = (
+        f"내일부터 예약하신 {villa} 이용이 시작됩니다.\n\n"
+        f"- 이용 기간: {period}\n\n"
+        f"출입방법·와이파이 등 이용안내를 아래 링크에서 확인해 주세요.\n"
+        f"{link}\n\n"
+        f"링크 접속에는 사내 SSO 로그인이 필요하며, 본인 예약만 조회됩니다.\n"
+    )
+    return _dispatch(db, reservation.user, f"[BIT] {villa} 이용안내", slack_message, mail_body)
+
+
+def notify_checkout_reminder(db: Session, reservation) -> bool:
+    """퇴실일 오전 발송하는 퇴실 체크사항 링크. 슬랙으로만 보낸다."""
+    villa = _villa_name(reservation)
+    link = checkout_url(reservation.id)
+
+    slack_message = (
+        f"🧹 *[{villa} 퇴실 체크사항]*\n\n"
+        f"오늘({reservation.end_date}) 퇴실일입니다.\n"
+        f"아래 링크에서 퇴실 전 체크사항을 확인하고 체크·제출해 주세요.\n{link}"
+    )
+    return _dispatch_slack_only(reservation.user, slack_message)
+
+
+def notify_admins_checkout_submitted(db: Session, reservation, checklist_items, checked, notes) -> int:
+    """퇴실 체크사항 제출 결과를 별장 관리 담당자에게 슬랙으로 알린다."""
+    villa = _villa_name(reservation)
+    period = _period(reservation)
+    applicant = reservation.user.name if reservation.user else "(알 수 없음)"
+
+    lines = []
+    for item, done in zip(checklist_items, checked):
+        mark = "✅" if done else "❌"
+        lines.append(f"{mark} {item['label']}")
+    checklist_block = "\n".join(lines)
+    notes_block = f"\n\n📝 *특이사항*\n{notes}" if notes else ""
+
+    slack_message = (
+        f"🧹 *[{villa} 퇴실 체크사항 제출]*\n\n"
+        f"*{applicant}* 님이 퇴실 체크사항을 제출했습니다.\n"
+        f"• *기간*: {period}\n\n"
+        f"{checklist_block}"
+        f"{notes_block}"
+    )
+    mail_body = (
+        f"{applicant} 님이 {villa} 퇴실 체크사항을 제출했습니다.\n\n"
+        f"기간: {period}\n\n"
+        + "\n".join(f"[{'V' if done else ' '}] {item['label']}" for item, done in zip(checklist_items, checked))
+        + (f"\n\n특이사항: {notes}\n" if notes else "\n")
+    )
+    return _notify_admins(db, f"[BIT] {villa} 퇴실 체크사항 제출 ({applicant})", slack_message, mail_body)
 
 
 def notify_rejected(db: Session, reservation) -> bool:

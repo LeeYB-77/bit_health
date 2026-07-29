@@ -84,6 +84,13 @@ SQL_COMMANDS = [
     # 별장 위임 관리자 플래그 (role='admin'과 별개로 비트별장만 관리)
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_villa_admin BOOLEAN DEFAULT FALSE;",
 
+    # 입실 전날 이용안내(메일+슬랙), 퇴실일 오전 퇴실체크 링크(슬랙) 발송 여부 및 제출 결과
+    "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS checkin_guide_sent BOOLEAN DEFAULT FALSE;",
+    "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS checkout_reminder_sent BOOLEAN DEFAULT FALSE;",
+    "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS checkout_checklist_checked TEXT;",
+    "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS checkout_checklist_notes TEXT;",
+    "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS checkout_checklist_submitted_at TIMESTAMP;",
+
     # 3. 별장 시설 시드 (정원 20명)
     """
     INSERT INTO facilities (name, type, capacity)

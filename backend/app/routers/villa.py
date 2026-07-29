@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from .. import models, auth, schemas, slack_utils, villa_notify
+from .. import models, auth, schemas, slack_utils, villa_notify, villa_content
 from ..database import get_db
 
 router = APIRouter(
@@ -658,6 +658,102 @@ def update_extra_info(
         )
 
     return {"message": "추가 정보를 저장했습니다.", "warning": warning, **_extra_info_payload(reservation)}
+
+
+# --- 이용안내 / 퇴실 체크사항 ---
+
+@router.get("/{reservation_id}/guide")
+def get_villa_guide(
+    reservation_id: int,
+    current_user: models.User = Depends(auth.get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    reservation = _get_own_reservation_or_error(db, reservation_id, current_user)
+    villa_name = reservation.facility.name if reservation.facility else None
+    content = villa_content.get_villa_content(villa_name)
+    if not content:
+        raise HTTPException(status_code=404, detail="이용안내 정보를 찾을 수 없습니다.")
+
+    return {
+        "reservation": {
+            "id": reservation.id,
+            "facility_name": villa_name,
+            "start_date": reservation.start_date,
+            "end_date": reservation.end_date,
+            "checkin_time": reservation.checkin_time,
+            "checkout_time": reservation.checkout_time,
+            "participant_count": reservation.participant_count,
+        },
+        "address": content["address"],
+        "address_note": content["address_note"],
+        "access": content["access"],
+        "notes": content["notes"],
+        "wifi": content["wifi"],
+        "key_return_notice": villa_content.KEY_RETURN_NOTICE,
+        "emergency_contact": villa_content.EMERGENCY_CONTACT,
+    }
+
+
+@router.get("/{reservation_id}/checkout")
+def get_villa_checkout(
+    reservation_id: int,
+    current_user: models.User = Depends(auth.get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    reservation = _get_own_reservation_or_error(db, reservation_id, current_user)
+    villa_name = reservation.facility.name if reservation.facility else None
+    content = villa_content.get_villa_content(villa_name)
+    if not content:
+        raise HTTPException(status_code=404, detail="퇴실 체크사항 정보를 찾을 수 없습니다.")
+
+    checked = json.loads(reservation.checkout_checklist_checked) if reservation.checkout_checklist_checked else None
+
+    return {
+        "reservation": {
+            "id": reservation.id,
+            "facility_name": villa_name,
+            "start_date": reservation.start_date,
+            "end_date": reservation.end_date,
+        },
+        "checklist": content["checklist"],
+        "key_return_notice": villa_content.KEY_RETURN_NOTICE,
+        "emergency_contact": villa_content.EMERGENCY_CONTACT,
+        "submitted": reservation.checkout_checklist_submitted_at is not None,
+        "checked": checked,
+        "notes": reservation.checkout_checklist_notes,
+    }
+
+
+@router.post("/{reservation_id}/checkout")
+def submit_villa_checkout(
+    reservation_id: int,
+    payload: schemas.VillaChecklistSubmit,
+    current_user: models.User = Depends(auth.get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    reservation = _get_own_reservation_or_error(db, reservation_id, current_user)
+    villa_name = reservation.facility.name if reservation.facility else None
+    content = villa_content.get_villa_content(villa_name)
+    if not content:
+        raise HTTPException(status_code=404, detail="퇴실 체크사항 정보를 찾을 수 없습니다.")
+
+    if len(payload.checked) != len(content["checklist"]):
+        raise HTTPException(status_code=400, detail="체크리스트 항목 수가 일치하지 않습니다.")
+
+    reservation.checkout_checklist_checked = json.dumps(payload.checked)
+    reservation.checkout_checklist_notes = (payload.notes or "").strip() or None
+    reservation.checkout_checklist_submitted_at = datetime.now()
+    db.commit()
+    db.refresh(reservation)
+
+    try:
+        villa_notify.notify_admins_checkout_submitted(
+            db, reservation, content["checklist"], payload.checked, reservation.checkout_checklist_notes,
+        )
+    except Exception as e:
+        print(f"Failed to notify admins of checkout checklist submission for reservation {reservation.id}: {e}")
+
+    return {"message": "퇴실 체크사항을 제출했습니다."}
 
 
 def _notify_admins_cancel_request(db: Session, reservation, applicant):

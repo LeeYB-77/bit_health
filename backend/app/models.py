@@ -131,6 +131,15 @@ class VillaReservation(Base):
     child_count = Column(Integer, nullable=True)   # 15세 이하
     extra_info_updated_at = Column(DateTime, nullable=True)
 
+    # 입실 전날 이용안내(메일+슬랙), 퇴실일 오전 퇴실체크 링크(슬랙) 발송 여부 — 중복 발송 방지
+    checkin_guide_sent = Column(Boolean, default=False)
+    checkout_reminder_sent = Column(Boolean, default=False)
+
+    # 퇴실 체크사항 제출 결과
+    checkout_checklist_checked = Column(Text, nullable=True)  # JSON 배열(불리언)
+    checkout_checklist_notes = Column(Text, nullable=True)    # 특이사항
+    checkout_checklist_submitted_at = Column(DateTime, nullable=True)
+
     # users를 세 번 참조하므로 foreign_keys를 명시해야 한다.
     user = relationship("User", foreign_keys=[user_id])
     facility = relationship("Facility")
