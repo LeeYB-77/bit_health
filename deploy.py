@@ -53,24 +53,30 @@ def deploy():
         print("Upload complete.")
 
         # 4. Execute Remote Commands
+        # 'docker compose down'을 미리 하지 않는다 — 빌드가 실패하면 기존 컨테이너가
+        # 이미 내려간 채로 아무것도 못 띄우는 사고가 난다(실제로 겪었다: 빌드 캐시
+        # 스냅샷 오류로 backend 이미지 빌드가 실패했는데, down을 먼저 해버려서
+        # 재시도 전까지 운영 사이트가 통째로 죽어 있었다). 'up -d --build'만으로도
+        # 바뀐 컨테이너만 새로 띄우고, 빌드가 실패하면 기존 컨테이너는 그대로
+        # 떠 있어 서비스가 끊기지 않는다.
         commands = [
             # Prepare directory
             f"mkdir -p {REMOTE_PATH}",
-            
+
             # Extract (stripping top level folder to ensure it goes into bit_health exactly)
             f"tar -xzf /home/bitcom/project.tar.gz -C {REMOTE_PATH} --strip-components=1",
-            
+
             # Clean up tar
             f"rm /home/bitcom/project.tar.gz",
-            
+
             # Rename deploy_docker_compose.yml to docker-compose.yml to ensure it's used
             f"mv {REMOTE_PATH}/deploy_docker_compose.yml {REMOTE_PATH}/docker-compose.yml",
-            
+
             # Restart Docker Compose (using 'docker compose' plugin style)
-            f"cd {REMOTE_PATH} && docker compose down || true", # || true to ignore error if down fails (e.g. first run)
-            f"cd {REMOTE_PATH} && docker compose up -d --build"
+            f"cd {REMOTE_PATH} && docker compose up -d --build",
         ]
 
+        failed = False
         for cmd in commands:
             print(f"Executing: {cmd}")
             stdin, stdout, stderr = ssh.exec_command(cmd)
@@ -83,10 +89,17 @@ def deploy():
 
             if exit_status != 0:
                 print(f"Command failed with status {exit_status}")
-                # Don't exit immediately, try to continue or let user know
-                # but depending on error, might stop. For now, continue.
+                failed = True
 
-        print("Deployment finished successfully!")
+        if failed:
+            print(
+                "\n[DEPLOYMENT FAILED] 위 명령 중 실패한 게 있습니다. "
+                "'docker compose up -d --build'가 실패했다면 기존 컨테이너는 계속 떠 있으니 "
+                "서비스 자체는 끊기지 않았을 가능성이 높지만, 새 코드는 반영되지 않았습니다. "
+                "원격 서버에서 컨테이너 상태와 빌드 로그를 확인한 뒤 다시 실행해 주세요."
+            )
+        else:
+            print("Deployment finished successfully!")
 
     except Exception as e:
         print(f"Deployment failed: {e}")
