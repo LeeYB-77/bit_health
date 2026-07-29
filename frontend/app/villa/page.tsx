@@ -423,7 +423,7 @@ export default function VillaPage() {
 
                             <div className="grid grid-cols-7 gap-1 text-center">
                                 {WEEKDAYS.map((w, i) => (
-                                    <div key={w} className={`text-[11px] font-bold py-1 ${
+                                    <div key={w} className={`text-xs font-bold py-1 ${
                                         i === 0 ? 'text-rose-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'
                                     }`}>
                                         {w}
@@ -452,7 +452,7 @@ export default function VillaPage() {
                                             key={iso}
                                             disabled={!selectable}
                                             onClick={() => openApply(iso)}
-                                            className={`relative aspect-square flex flex-col items-center justify-center rounded-lg text-xs transition-all ${
+                                            className={`relative aspect-square flex flex-col items-center justify-center rounded-lg text-sm transition-all ${
                                                 isPast ? 'text-gray-300'
                                                     : selectable ? 'text-gray-800 hover:bg-blue-50 active:scale-95'
                                                         : 'text-gray-500 cursor-not-allowed'
@@ -471,7 +471,7 @@ export default function VillaPage() {
                                             )}
 
                                             {!blocked && appliedCount > 0 && (
-                                                <span className="text-[9px] text-amber-600 font-bold leading-none mt-0.5">
+                                                <span className="text-[10px] text-amber-600 font-bold leading-none mt-0.5">
                                                     {appliedCount}팀
                                                 </span>
                                             )}
@@ -484,7 +484,7 @@ export default function VillaPage() {
                             </div>
 
                             {/* 범례 */}
-                            <div className="flex items-center justify-center gap-4 mt-4 pt-3 border-t border-gray-100 text-[11px] text-gray-500">
+                            <div className="flex items-center justify-center gap-4 mt-4 pt-3 border-t border-gray-100 text-xs text-gray-500">
                                 <span className="flex items-center gap-1.5">
                                     <span className="w-3 h-1.5 rounded-full bg-blue-500" /> 확정
                                 </span>

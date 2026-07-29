@@ -157,10 +157,10 @@ function MiniMonth({
 
     return (
         <div className="rounded-xl border border-gray-100 p-2.5">
-            <p className="text-xs font-bold text-gray-700 mb-2">{label} · {year}년 {month}월</p>
+            <p className="text-sm font-bold text-gray-700 mb-2">{label} · {year}년 {month}월</p>
             <div className="grid grid-cols-7 gap-0.5 text-center">
                 {WEEKDAYS.map((w, i) => (
-                    <div key={w} className={`text-[9px] font-bold py-0.5 ${
+                    <div key={w} className={`text-[10px] font-bold py-0.5 ${
                         i === 0 ? 'text-rose-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'
                     }`}>
                         {w}
@@ -178,7 +178,7 @@ function MiniMonth({
                             key={iso}
                             disabled={!bar}
                             onClick={() => entry && onSelect(entry)}
-                            className={`relative aspect-square flex flex-col items-center justify-start rounded text-[10px] pt-0.5 ${
+                            className={`relative aspect-square flex flex-col items-center justify-start rounded text-[11px] pt-0.5 ${
                                 bar ? 'hover:ring-1 hover:ring-blue-300 cursor-pointer' : ''
                             }`}
                         >
@@ -191,7 +191,7 @@ function MiniMonth({
                                 />
                             )}
                             {bar && isBarStart && (
-                                <span className="text-[8px] leading-tight text-gray-600 truncate w-full px-0.5">
+                                <span className="text-[9px] leading-tight text-gray-600 truncate w-full px-0.5">
                                     {bar.user_name}
                                     {!entry?.confirmed && entry && entry.pending.length > 1 && ` +${entry.pending.length - 1}`}
                                 </span>
@@ -431,7 +431,7 @@ export default function AdminVillaPage() {
                         );
                     })()}
 
-                    <div className="flex items-center justify-center gap-4 mt-3 pt-3 border-t border-gray-100 text-[11px] text-gray-500">
+                    <div className="flex items-center justify-center gap-4 mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
                         <span className="flex items-center gap-1.5">
                             <span className="w-3 h-1 rounded-full bg-blue-500" /> 확정
                         </span>
