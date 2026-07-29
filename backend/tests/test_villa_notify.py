@@ -220,7 +220,10 @@ def test_취소_반려시_사용자에게_통보(client, db, facilities, make_us
 
 # --- 추가 입력사항 ---
 
-EXTRA = {"vehicle_count": 2, "vehicle_numbers": "12가3456, 34나5678", "adult_count": 4, "child_count": 2}
+EXTRA = {
+    "vehicle_count": 2, "vehicle_numbers": "12가3456, 34나5678",
+    "adult_count": 4, "child_count": 2, "contact_phone": "010-0000-0000",
+}
 
 
 def test_추가입력_저장과_조회(client, db, facilities, make_user, auth_headers):
@@ -331,19 +334,21 @@ def test_연락처_저장과_조회(client, db, facilities, make_user, auth_head
     assert got["contact_phone"] == "010-1234-5678"
 
 
-def test_연락처_공백만_입력하면_None(client, db, facilities, make_user, auth_headers):
+def test_연락처_공백만_입력하면_400(client, db, facilities, make_user, auth_headers):
+    """연락처는 필수 입력이라 공백만 입력하면 거부한다."""
     user = make_user()
     row = _confirmed(db, facilities, user)
-    client.post(f"/api/villa/{row.id}/extra", headers=auth_headers(user),
-                json={**EXTRA, "contact_phone": "   "})
+    res = client.post(f"/api/villa/{row.id}/extra", headers=auth_headers(user),
+                      json={**EXTRA, "contact_phone": "   "})
+    assert res.status_code == 400
     db.refresh(row)
     assert row.contact_phone is None
 
 
-def test_연락처_생략해도_저장_가능(client, db, facilities, make_user, auth_headers):
-    """연락처는 선택 입력이라 안 보내도 저장이 실패하면 안 된다."""
+def test_연락처_생략하면_422(client, db, facilities, make_user, auth_headers):
+    """연락처는 필수 입력이라 아예 안 보내면 유효성 검증에서 거부된다."""
     user = make_user()
     row = _confirmed(db, facilities, user)
-    res = client.post(f"/api/villa/{row.id}/extra", headers=auth_headers(user), json=EXTRA)
-    assert res.status_code == 200
-    assert res.json()["contact_phone"] is None
+    without_phone = {k: v for k, v in EXTRA.items() if k != "contact_phone"}
+    res = client.post(f"/api/villa/{row.id}/extra", headers=auth_headers(user), json=without_phone)
+    assert res.status_code == 422

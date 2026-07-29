@@ -100,7 +100,7 @@ class VillaExtraInfoUpdate(BaseModel):
     vehicle_numbers: Optional[str] = None
     adult_count: int = 0
     child_count: int = 0      # 15세 이하
-    contact_phone: Optional[str] = None  # 현장 연락처
+    contact_phone: str        # 현장 연락처 — 필수
 
 
 class VillaCancelRequest(BaseModel):

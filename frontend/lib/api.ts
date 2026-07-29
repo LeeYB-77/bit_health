@@ -308,7 +308,7 @@ export const saveVillaExtraInfo = async (
     vehicle_numbers: string | null;
     adult_count: number;
     child_count: number;
-    contact_phone: string | null;
+    contact_phone: string;  // 필수 입력
   }
 ): Promise<VillaExtraInfo> => {
   return fetcher(`/api/villa/${id}/extra`, {

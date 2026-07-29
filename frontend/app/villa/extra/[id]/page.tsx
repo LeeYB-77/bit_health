@@ -70,9 +70,10 @@ export default function VillaExtraInfoPage() {
 
     const total = adultCount + childCount;
     const mismatch = !!info && total !== info.participant_count;
+    const contactPhoneMissing = contactPhone.trim() === '';
 
     const save = async () => {
-        if (!info) return;
+        if (!info || contactPhoneMissing) return;
         setSaving(true);
         setError(null);
         setSaved(null);
@@ -82,7 +83,7 @@ export default function VillaExtraInfoPage() {
                 vehicle_numbers: vehicleNumbers.map(v => v.trim()).filter(Boolean).join(', ') || null,
                 adult_count: adultCount,
                 child_count: childCount,
-                contact_phone: contactPhone.trim() || null,
+                contact_phone: contactPhone.trim(),
             });
             setSaved({ warning: result.warning ?? null });
             setInfo(result);
@@ -238,21 +239,27 @@ export default function VillaExtraInfoPage() {
                                 <Phone size={16} className="text-blue-600" /> 이용자 연락처
                             </h2>
                             <label className="block">
-                                <span className="text-xs font-bold text-gray-600">현장에서 연락 가능한 번호</span>
+                                <span className="text-xs font-bold text-gray-600">
+                                    현장에서 연락 가능한 번호 <span className="text-rose-500">*</span>
+                                </span>
                                 <input
                                     type="tel"
+                                    required
                                     value={contactPhone}
                                     onChange={e => setContactPhone(e.target.value)}
                                     placeholder="010-1234-5678"
                                     className={inputCls}
                                 />
                             </label>
+                            {contactPhoneMissing && (
+                                <p className="text-xs text-rose-500">연락처는 필수 입력입니다.</p>
+                            )}
                         </section>
 
                         <button
                             onClick={save}
-                            disabled={saving}
-                            className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 disabled:bg-gray-300 flex items-center justify-center gap-2"
+                            disabled={saving || contactPhoneMissing}
+                            className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
                             {saving ? <Loader2 size={18} className="animate-spin" /> : '저장하기'}
                         </button>

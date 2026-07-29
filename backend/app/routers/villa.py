@@ -641,11 +641,15 @@ def update_extra_info(
     if payload.vehicle_count < 0 or payload.adult_count < 0 or payload.child_count < 0:
         raise HTTPException(status_code=400, detail="인원과 차량 대수는 0 이상이어야 합니다.")
 
+    contact_phone = payload.contact_phone.strip()
+    if not contact_phone:
+        raise HTTPException(status_code=400, detail="연락처를 입력해 주세요.")
+
     reservation.vehicle_count = payload.vehicle_count
     reservation.vehicle_numbers = (payload.vehicle_numbers or "").strip() or None
     reservation.adult_count = payload.adult_count
     reservation.child_count = payload.child_count
-    reservation.contact_phone = (payload.contact_phone or "").strip() or None
+    reservation.contact_phone = contact_phone
     reservation.extra_info_updated_at = datetime.now()
     db.commit()
     db.refresh(reservation)
