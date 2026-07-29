@@ -466,52 +466,48 @@ def apply_villa(
             ),
         )
 
-    # 확정된 기간과 겹치면 거부. applied끼리는 중복 신청을 허용한다(관리자가 선택).
-    if overlapping_query(db, villa.id, start, end, BLOCKING_STATUSES).first():
-        raise HTTPException(status_code=409, detail="해당 기간에 이미 확정된 예약이 있습니다.")
-
-    # 본인이 같은 기간에 이미 신청했는지
-    mine = overlapping_query(db, villa.id, start, end, ("applied",)).filter(
-        models.VillaReservation.user_id == current_user.id
-    ).first()
-    if mine:
-        raise HTTPException(status_code=400, detail="이미 해당 기간에 신청하셨습니다.")
-
-    # 선착순은 관리자 개입 없이 즉시 확정한다. 정규예약은 마감 후 관리자가 선정한다.
     is_open_booking = mode == "open"
+
+    # 확정된 기간과 겹치면 거부한다. 선착순 기간은 중복 신청 자체를 막아야 하므로
+    # 아직 확정 전인(applied) 다른 신청과도 겹치면 거부한다. 정규예약은 applied끼리
+    # 중복 신청을 허용한다(마감 후 관리자가 선정).
+    conflict_statuses = VISIBLE_STATUSES if is_open_booking else BLOCKING_STATUSES
+    conflict = overlapping_query(db, villa.id, start, end, conflict_statuses).first()
+    if conflict:
+        if conflict.status in BLOCKING_STATUSES:
+            raise HTTPException(status_code=409, detail="해당 기간에 이미 확정된 예약이 있습니다.")
+        raise HTTPException(status_code=409, detail="해당 기간은 이미 다른 분이 먼저 신청했습니다. 선착순 신청은 중복 신청이 불가합니다.")
+
+    # 본인이 같은 기간에 이미 신청했는지 (정규예약. 선착순은 위에서 이미 걸러진다)
+    if not is_open_booking:
+        mine = overlapping_query(db, villa.id, start, end, ("applied",)).filter(
+            models.VillaReservation.user_id == current_user.id
+        ).first()
+        if mine:
+            raise HTTPException(status_code=400, detail="이미 해당 기간에 신청하셨습니다.")
+
+    # 선착순도 정규예약과 마찬가지로 관리자가 확정한다(중복 신청은 위에서 이미 막았다).
     reservation = models.VillaReservation(
         user_id=current_user.id,
         facility_id=villa.id,
         start_date=start,
         end_date=end,
-        # 초기값은 신청 시간 그대로다. 확정되는 순간(아래) 인접 예약이 있으면
+        # 초기값은 신청 시간 그대로다. 확정되는 순간 인접 예약이 있으면
         # sync_boundary_times가 정규 시간으로 덮어쓴다.
         checkin_time=payload.checkin_time,
         checkout_time=payload.checkout_time,
         requested_checkin_time=payload.checkin_time,
         requested_checkout_time=payload.checkout_time,
         participant_count=payload.participant_count,
-        status="confirmed" if is_open_booking else "applied",
+        status="applied",
         booking_type="open" if is_open_booking else "regular",
         round_id=booking_round.id if booking_round else None,
-        confirmed_at=datetime.now() if is_open_booking else None,
-        confirmed_by=current_user.id if is_open_booking else None,
-        # 즉시 통보하므로 일괄 통보 대상에서 제외한다
-        notified_confirmed=is_open_booking,
     )
     db.add(reservation)
     db.commit()
     db.refresh(reservation)
 
-    if is_open_booking:
-        # applied 상태(정규예약 대기)는 아직 확정이 아니므로 동기화하지 않는다.
-        # 선착순은 생성 즉시 확정이라 여기서 인접 여부를 확정해야 한다.
-        newly_forced = sync_boundary_times(db, reservation)
-        db.commit()
-        villa_notify.notify_confirmed(db, reservation)  # 강제 여부가 메시지에 반영된다
-        _notify_newly_forced(db, reservation, newly_forced)
-
-    # 정규예약 대기든 선착순 즉시확정이든, 신청이 접수될 때마다 관리자에게 알린다.
+    # 정규예약 대기든 선착순 대기든, 신청이 접수될 때마다 관리자에게 알린다.
     villa_notify.notify_admins_new_application(db, reservation, is_open_booking)
 
     return reservation
@@ -934,6 +930,14 @@ def confirm_application(
     newly_forced = sync_boundary_times(db, reservation)
     db.commit()
     _notify_newly_forced(db, reservation, newly_forced)
+
+    # 정규예약 확정 통보는 마감일 일괄 통보(notify_due_rounds)에서 나간다. 하지만
+    # 선착순 회차는 이미 그 통보가 끝난(notified) 상태라 스케줄러가 다시 봐주지
+    # 않으므로, 확정하는 이 자리에서 바로 통보해야 한다.
+    if reservation.booking_type == "open":
+        villa_notify.notify_confirmed(db, reservation)  # 강제 여부가 메시지에 반영된다
+        reservation.notified_confirmed = True
+        db.commit()
 
     return {
         "message": "예약을 확정했습니다.",

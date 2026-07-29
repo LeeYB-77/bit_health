@@ -73,28 +73,33 @@ def test_인접_예약_없으면_신청시간_그대로(client, db, facilities, 
 # --- 체크아웃-체크인 경계 겹침 ---
 
 def test_같은날_퇴실_입실이_겹치면_양쪽_모두_정규시간_강제(client, db, facilities, make_user, auth_headers, captured):
+    """선착순도 이제 관리자 확정이 필요하다. 경계 동기화는 확정 시점에 일어난다."""
     villa = facilities["cheongpyeong"]
     d1, d2, d3 = _in_target_month(10, 1), _in_target_month(12, 1), _in_target_month(14, 1)
     _open_round(db, d1)
+    headers_admin = auth_headers(_admin(make_user))
 
     first_user = make_user(email="first@bit.kr")
     res1 = client.post("/api/villa/apply", headers=auth_headers(first_user),
                        json=_custom_payload(villa.id, d1, d2, "16:00", "10:00"))
     assert res1.status_code == 200, res1.text
-    assert res1.json()["checkout_time_forced"] is False  # 아직 뒤에 붙는 예약이 없다
+    assert res1.json()["status"] == "applied"  # 선착순도 즉시 확정이 아니다
+    client.post(f"/api/villa/admin/confirm/{res1.json()['id']}", headers=headers_admin)
 
     second_user = make_user(email="second@bit.kr")
     res2 = client.post("/api/villa/apply", headers=auth_headers(second_user),
                        json=_custom_payload(villa.id, d2, d3, "17:00", "09:00"))
     assert res2.status_code == 200, res2.text
-    body2 = res2.json()
+    second_id = res2.json()["id"]
+    client.post(f"/api/villa/admin/confirm/{second_id}", headers=headers_admin)
 
     # 두 번째 예약의 체크인이 첫 예약의 체크아웃(d2)과 겹친다 → 체크인 강제
-    assert body2["checkin_time_forced"] is True
-    assert body2["checkin_time"] == "14:00"  # villa_settings 기본값
+    second = db.query(models.VillaReservation).filter(models.VillaReservation.id == second_id).one()
+    assert second.checkin_time_forced is True
+    assert second.checkin_time == "14:00"  # villa_settings 기본값
     # 체크아웃 쪽은 뒤에 아무도 없으니 신청 시간(09:00) 유지
-    assert body2["checkout_time_forced"] is False
-    assert body2["checkout_time"] == "09:00"
+    assert second.checkout_time_forced is False
+    assert second.checkout_time == "09:00"
 
     # 첫 예약도 뒤늦게 강제로 전환됐어야 한다
     row1 = db.query(models.VillaReservation).filter(models.VillaReservation.id == res1.json()["id"]).one()
@@ -179,15 +184,18 @@ def test_알림_문구에_정규시간_안내_포함(client, db, facilities, mak
     villa = facilities["cheongpyeong"]
     d1, d2, d3 = _in_target_month(10, 1), _in_target_month(12, 1), _in_target_month(14, 1)
     _open_round(db, d1)
+    headers_admin = auth_headers(_admin(make_user))
 
     make_user_first = make_user(email="first@bit.kr")
-    client.post("/api/villa/apply", headers=auth_headers(make_user_first),
+    res1 = client.post("/api/villa/apply", headers=auth_headers(make_user_first),
                json=_custom_payload(villa.id, d1, d2, "16:00", "10:00"))
+    client.post(f"/api/villa/admin/confirm/{res1.json()['id']}", headers=headers_admin)
 
     captured["mail"].clear()
     captured["slack"].clear()
-    client.post("/api/villa/apply", headers=auth_headers(make_user(email="second@bit.kr")),
+    res2 = client.post("/api/villa/apply", headers=auth_headers(make_user(email="second@bit.kr")),
                json=_custom_payload(villa.id, d2, d3, "17:00", "09:00"))
+    client.post(f"/api/villa/admin/confirm/{res2.json()['id']}", headers=headers_admin)
 
     # 두 번째 사용자(본인)는 확정 메시지에 강제 안내가 포함된다
     own_mail = next(m for m in captured["mail"] if m["to"] == "second@bit.kr")
@@ -212,9 +220,12 @@ def test_취소승인되면_이웃의_강제가_해제된다(client, db, facilit
     first_user = make_user(email="first@bit.kr")
     res1 = client.post("/api/villa/apply", headers=auth_headers(first_user),
                        json=_custom_payload(villa.id, d1, d2, "16:00", "10:00"))
+    client.post(f"/api/villa/admin/confirm/{res1.json()['id']}", headers=headers_admin)
+
     second_user = make_user(email="second@bit.kr")
     res2 = client.post("/api/villa/apply", headers=auth_headers(second_user),
                        json=_custom_payload(villa.id, d2, d3, "17:00", "09:00"))
+    client.post(f"/api/villa/admin/confirm/{res2.json()['id']}", headers=headers_admin)
 
     row1 = db.query(models.VillaReservation).filter(models.VillaReservation.id == res1.json()["id"]).one()
     assert row1.checkout_time_forced is True  # 강제된 상태에서 시작
@@ -238,9 +249,12 @@ def test_취소승인_해제는_알림을_보내지_않는다(client, db, facili
     first_user = make_user(email="first@bit.kr")
     res1 = client.post("/api/villa/apply", headers=auth_headers(first_user),
                        json=_custom_payload(villa.id, d1, d2, "16:00", "10:00"))
+    client.post(f"/api/villa/admin/confirm/{res1.json()['id']}", headers=headers_admin)
+
     second_user = make_user(email="second@bit.kr")
     res2 = client.post("/api/villa/apply", headers=auth_headers(second_user),
                        json=_custom_payload(villa.id, d2, d3, "17:00", "09:00"))
+    client.post(f"/api/villa/admin/confirm/{res2.json()['id']}", headers=headers_admin)
 
     client.post(f"/api/villa/cancel-request/{res2.json()['id']}", headers=auth_headers(second_user), json={})
     captured["mail"].clear()
@@ -292,17 +306,18 @@ def test_관리자_신청목록에_강제여부_포함(client, db, facilities, m
     villa = facilities["cheongpyeong"]
     d1, d2, d3 = _in_target_month(10, 1), _in_target_month(12, 1), _in_target_month(14, 1)
     _open_round(db, d1)
+    headers_admin = auth_headers(_admin(make_user))
 
-    client.post("/api/villa/apply", headers=auth_headers(make_user(email="a@bit.kr")),
+    res1 = client.post("/api/villa/apply", headers=auth_headers(make_user(email="a@bit.kr")),
                json=_custom_payload(villa.id, d1, d2, "16:00", "10:00"))
-    client.post("/api/villa/apply", headers=auth_headers(make_user(email="b@bit.kr")),
+    client.post(f"/api/villa/admin/confirm/{res1.json()['id']}", headers=headers_admin)
+    res2 = client.post("/api/villa/apply", headers=auth_headers(make_user(email="b@bit.kr")),
                json=_custom_payload(villa.id, d2, d3, "17:00", "09:00"))
+    client.post(f"/api/villa/admin/confirm/{res2.json()['id']}", headers=headers_admin)
 
-    admin = _admin(make_user)
     ny, nm = d1.year, d1.month
     body = client.get(f"/api/villa/admin/applications?year={ny}&month={nm}",
-                      headers=auth_headers(admin)).json()
-    by_checkin = {a["checkin_time"]: a for c in body["confirmed"] for a in [c]}
+                      headers=headers_admin).json()
     forced_flags = {c["checkin_time_forced"] for c in body["confirmed"]} | \
                     {c["checkout_time_forced"] for c in body["confirmed"]}
     assert True in forced_flags  # 최소 한쪽은 강제되어 있어야 한다
@@ -312,12 +327,16 @@ def test_내신청_목록에_강제여부_포함(client, db, facilities, make_us
     villa = facilities["cheongpyeong"]
     d1, d2, d3 = _in_target_month(10, 1), _in_target_month(12, 1), _in_target_month(14, 1)
     _open_round(db, d1)
+    headers_admin = auth_headers(_admin(make_user))
 
     first_user = make_user(email="first@bit.kr")
-    client.post("/api/villa/apply", headers=auth_headers(first_user),
+    res1 = client.post("/api/villa/apply", headers=auth_headers(first_user),
                json=_custom_payload(villa.id, d1, d2, "16:00", "10:00"))
-    client.post("/api/villa/apply", headers=auth_headers(make_user(email="second@bit.kr")),
+    client.post(f"/api/villa/admin/confirm/{res1.json()['id']}", headers=headers_admin)
+
+    res2 = client.post("/api/villa/apply", headers=auth_headers(make_user(email="second@bit.kr")),
                json=_custom_payload(villa.id, d2, d3, "17:00", "09:00"))
+    client.post(f"/api/villa/admin/confirm/{res2.json()['id']}", headers=headers_admin)
 
     my = client.get("/api/villa/my", headers=auth_headers(first_user)).json()
     assert my[0]["checkout_time_forced"] is True

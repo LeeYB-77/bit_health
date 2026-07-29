@@ -88,33 +88,45 @@ def _notified_round_for(db, start_date):
     )
 
 
-def test_통보완료된_달은_선착순으로_즉시_확정(client, db, facilities, make_user, auth_headers, captured):
+def test_선착순도_신청은_대기이며_관리자_확정으로_통보(client, db, facilities, make_user, auth_headers, captured):
+    """선착순도 중복 신청 방지를 위해 즉시 확정하지 않고, 관리자 확정을 거쳐야 통보된다."""
     # 대상월 다음 달을 통보 완료 상태로 만든다
     start = _in_target_month(10, 1)
     end = _in_target_month(12, 1)
     _notified_round_for(db, start)
+    admin = _admin(make_user)
 
     user = make_user(email="kim@bit.kr")
     res = client.post("/api/villa/apply", headers=auth_headers(user),
                       json=_payload(facilities["cheongpyeong"].id, start, end))
     assert res.status_code == 200, res.text
     body = res.json()
-    assert body["status"] == "confirmed"
+    assert body["status"] == "applied"
     assert body["booking_type"] == "open"
 
     row = db.query(models.VillaReservation).filter(models.VillaReservation.id == body["id"]).one()
+    assert row.confirmed_at is None
+    assert row.notified_confirmed is False
+
+    client.post(f"/api/villa/admin/confirm/{body['id']}", headers=auth_headers(admin))
+    db.refresh(row)
     assert row.confirmed_at is not None
-    # 즉시 통보했으므로 일괄 통보 대상에서 빠져야 한다
+    # 확정 시점에 바로 통보했으므로(회차가 이미 notified라 일괄 통보 대상이 아니다) 여기서 True가 된다
     assert row.notified_confirmed is True
 
 
 def test_선착순_확정시_추가입력_링크_통보(client, db, facilities, make_user, auth_headers, captured):
     start, end = _in_target_month(10, 1), _in_target_month(12, 1)
     _notified_round_for(db, start)
+    admin = _admin(make_user)
 
     user = make_user(email="kim@bit.kr")
     res = client.post("/api/villa/apply", headers=auth_headers(user),
                       json=_payload(facilities["cheongpyeong"].id, start, end))
+
+    captured["mail"].clear()
+    captured["slack"].clear()
+    client.post(f"/api/villa/admin/confirm/{res.json()['id']}", headers=auth_headers(admin))
 
     link = villa_notify.extra_info_url(res.json()["id"])
     assert link in captured["slack"][0]["message"]
@@ -132,6 +144,7 @@ def test_선착순도_확정된_기간과_겹치면_409(client, db, facilities, 
 
 
 def test_선착순_먼저_신청한_사람이_차지(client, db, facilities, make_user, auth_headers, captured):
+    """확정 전(applied)이어도 선착순 기간은 같은 기간 중복 신청 자체가 막힌다."""
     start, end = _in_target_month(10, 1), _in_target_month(12, 1)
     _notified_round_for(db, start)
     villa = facilities["cheongpyeong"]
@@ -142,6 +155,22 @@ def test_선착순_먼저_신청한_사람이_차지(client, db, facilities, mak
                          json=_payload(villa.id, start, end))
 
     assert first.status_code == 200
+    assert first.json()["status"] == "applied"  # 관리자 확정 전까지는 대기 상태
+    assert second.status_code == 409
+
+
+def test_선착순_겹치는_기간도_대기중이면_신청_차단(client, db, facilities, make_user, auth_headers, captured):
+    """정확히 같은 기간이 아니라 겹치기만 해도, 아직 확정 전(applied)인 신청과 중복 신청은 막는다."""
+    start, mid, end = _in_target_month(10, 1), _in_target_month(12, 1), _in_target_month(14, 1)
+    _notified_round_for(db, start)
+    villa = facilities["cheongpyeong"]
+
+    first = client.post("/api/villa/apply", headers=auth_headers(make_user(email="a@bit.kr")),
+                        json=_payload(villa.id, start, mid))
+    assert first.status_code == 200
+
+    second = client.post("/api/villa/apply", headers=auth_headers(make_user(email="b@bit.kr")),
+                         json=_payload(villa.id, start, end))
     assert second.status_code == 409
 
 

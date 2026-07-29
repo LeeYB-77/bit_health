@@ -158,7 +158,8 @@ def test_정규신청시_관리자에게_즉시_알림(client, facilities, make_
     assert "새 예약 신청" in captured["mail"][0]["subject"]
 
 
-def test_선착순_확정시에도_관리자에게_알림(client, db, facilities, make_user, auth_headers, captured):
+def test_선착순_신청시에도_관리자에게_알림(client, db, facilities, make_user, auth_headers, captured):
+    """선착순도 관리자 확정이 필요하다. 신청 시점에 관리자에게 알려야 확정 처리를 할 수 있다."""
     _sysadmin(make_user)
     villa = facilities["cheongpyeong"]
     start, end = _in_target_month(10, 1), _in_target_month(12, 1)
@@ -172,7 +173,8 @@ def test_선착순_확정시에도_관리자에게_알림(client, db, facilities
     res = client.post("/api/villa/apply", headers=auth_headers(applicant),
                       json=_payload(villa.id, start, end))
     assert res.status_code == 200
-    assert res.json()["status"] == "confirmed"
+    assert res.json()["status"] == "applied"  # 선착순도 즉시 확정이 아니라 관리자 확정 대기
+    assert res.json()["booking_type"] == "open"
 
     admin_mail = [m for m in captured["mail"] if m["to"] == "sysadmin@bit.kr"]
     assert len(admin_mail) == 1

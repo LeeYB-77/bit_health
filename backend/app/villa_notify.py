@@ -194,9 +194,9 @@ def _notify_admins(db: Session, subject: str, slack_message: str, mail_body: str
 
 def notify_admins_new_application(db: Session, reservation, is_open_booking: bool) -> int:
     """
-    예약 신청이 접수될 때마다(정규예약 대기 또는 선착순 즉시확정 모두) 관리자에게
-    알린다. 취소 요청과 달리 방치 위험은 없지만, 관리자가 접수 현황을 실시간으로
-    파악하고 싶다는 요청에 따라 매 신청마다 보낸다.
+    예약 신청이 접수될 때마다(정규예약 대기, 선착순 대기 모두 관리자 확정이 필요하다)
+    관리자에게 알린다. 취소 요청과 달리 방치 위험은 없지만, 관리자가 접수 현황을
+    실시간으로 파악하고 싶다는 요청에 따라 매 신청마다 보낸다.
     """
     villa = _villa_name(reservation)
     period = _period(reservation)
@@ -204,8 +204,8 @@ def notify_admins_new_application(db: Session, reservation, is_open_booking: boo
     dept = f" · {reservation.user.department}" if reservation.user and reservation.user.department else ""
 
     if is_open_booking:
-        title = "선착순 예약 확정"
-        detail = "정규예약 마감 후 남은 날짜라 선착순으로 즉시 확정되었습니다."
+        title = "선착순 예약 신청"
+        detail = "정규예약 마감 후 남은 날짜에 대한 선착순 신청입니다. 중복 신청은 불가하니 관리자 페이지에서 확정 처리를 해주세요."
     else:
         title = "새 예약 신청"
         detail = "정규예약 접수중입니다. 마감 후 관리자 페이지에서 확정 처리를 해주세요."

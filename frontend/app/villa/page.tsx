@@ -249,19 +249,14 @@ export default function VillaPage() {
         if (!selectedVillaId || formError) return;
         setSubmitting(true);
         try {
-            const result = await applyVilla({ facility_id: selectedVillaId, ...form });
+            await applyVilla({ facility_id: selectedVillaId, ...form });
             setApplyOpen(false);
 
             const baseText = bookingMode === 'open'
-                ? '선착순 예약이 확정되었습니다. 확정 안내와 추가입력 링크를 보내드렸습니다.'
+                ? '선착순 신청이 접수되었습니다. 관리자 확인 후 확정되며, 확정 안내는 Slack·메일로 보내드립니다.'
                 : '예약을 신청했습니다. 확정 결과는 마감일에 안내됩니다.';
-            // 앞뒤로 붙는 예약이 있으면 정규 시간이 강제된다. 확정 즉시(선착순) 알 수 있으므로 덧붙인다.
-            const boundaryNote = [
-                result.checkin_time_forced && `입실은 앞 예약자의 퇴실과 겹쳐 정규 시간(${result.checkin_time})으로 지정됐습니다.`,
-                result.checkout_time_forced && `퇴실은 뒤 예약자의 입실과 겹쳐 정규 시간(${result.checkout_time})으로 지정됐습니다.`,
-            ].filter(Boolean).join(' ');
 
-            setMessage({ type: 'ok', text: boundaryNote ? `${baseText} ${boundaryNote}` : baseText });
+            setMessage({ type: 'ok', text: baseText });
             await reload();
         } catch (e) {
             setMessage({ type: 'err', text: e instanceof Error ? e.message : '신청에 실패했습니다.' });
@@ -415,7 +410,8 @@ export default function VillaPage() {
                             {bookingMode === 'open' && (
                                 <p className="text-xs text-emerald-700 bg-emerald-50 rounded-lg p-2.5 mb-3 flex items-start gap-1.5">
                                     <Info size={14} className="mt-0.5 shrink-0" />
-                                    정규예약이 끝난 달입니다. 남은 날짜는 <b className="mx-0.5">선착순</b>으로 신청 즉시 확정됩니다.
+                                    정규예약이 끝난 달입니다. 남은 날짜는 <b className="mx-0.5">선착순</b>으로 신청할 수 있으며,
+                                    중복 신청 없이 관리자 확인 후 확정됩니다.
                                 </p>
                             )}
                             {bookingMode === 'closed' && (
@@ -708,8 +704,8 @@ export default function VillaPage() {
 
                             {bookingMode === 'open' ? (
                                 <p className="text-[11px] text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 leading-relaxed">
-                                    선착순 신청입니다. 신청하는 즉시 예약이 확정되며, 확정 안내와 추가입력 링크가
-                                    Slack·메일로 발송됩니다.
+                                    정규예약 마감 후 남은 날짜에 대한 선착순 신청입니다. 같은 기간은 중복 신청이
+                                    되지 않으며, 관리자 확인 후 확정되면 Slack·메일로 안내해 드립니다.
                                 </p>
                             ) : (
                                 <p className="text-[11px] text-gray-500 bg-gray-50 rounded-lg px-3 py-2 leading-relaxed">
