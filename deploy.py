@@ -1,5 +1,6 @@
 import paramiko
 import os
+import sys
 import tarfile
 
 # Configuration (접속 정보는 .env에서 읽는다. remote_config 참조)
@@ -7,6 +8,16 @@ from remote_config import HOST, PORT, USERNAME, PASSWORD
 
 REMOTE_PATH = '/home/bitcom/bit_health'
 LOCAL_PATH = os.getcwd()
+
+
+def safe_print(text):
+    """Windows 콘솔(cp949)이 인코딩 못하는 문자(빌드 출력의 ✓ 등)로 인해
+    배포가 실제로는 성공했는데도 print()에서 죽어 실패한 것처럼 보이는 문제를 막는다."""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        enc = sys.stdout.encoding or "utf-8"
+        print(text.encode(enc, errors="replace").decode(enc, errors="replace"))
 
 def create_tarball(source_dir, output_filename):
     print(f"Creating tarball from {source_dir}...")
@@ -64,12 +75,12 @@ def deploy():
             print(f"Executing: {cmd}")
             stdin, stdout, stderr = ssh.exec_command(cmd)
             exit_status = stdout.channel.recv_exit_status()
-            out = stdout.read().decode().strip()
-            err = stderr.read().decode().strip()
-            
-            if out: print(out)
-            if err: print(f"Stderr: {err}")
-            
+            out = stdout.read().decode("utf-8", errors="replace").strip()
+            err = stderr.read().decode("utf-8", errors="replace").strip()
+
+            if out: safe_print(out)
+            if err: safe_print(f"Stderr: {err}")
+
             if exit_status != 0:
                 print(f"Command failed with status {exit_status}")
                 # Don't exit immediately, try to continue or let user know
