@@ -107,6 +107,10 @@ class VillaCancelRequest(BaseModel):
     reason: Optional[str] = None
 
 
+class VillaKeyIssue(BaseModel):
+    key_number: str
+
+
 class VillaChecklistSubmit(BaseModel):
     """퇴실 체크사항 제출. checked는 별장별 체크리스트 항목과 같은 길이의 불리언 배열이어야 한다."""
     checked: List[bool]

@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { API_URL, getVillas, Villa } from '@/lib/api';
-import { AlertTriangle, ArrowLeft, Calendar, Check, Loader2, Send, Users, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Calendar, Check, Key, Loader2, Send, Users, X } from 'lucide-react';
 
 interface Application {
     id: number;
@@ -32,6 +32,9 @@ interface Application {
     child_count: number | null;
     contact_phone: string | null;
     cancel_reason: string | null;
+    key_number: string | null;
+    key_issued_at: string | null;
+    key_returned_at: string | null;
 }
 
 interface Group {
@@ -80,8 +83,12 @@ const authHeaders = (): HeadersInit => ({
     Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('access_token') : ''}`,
 });
 
-async function call(path: string, method: 'GET' | 'POST' = 'GET') {
-    const res = await fetch(`${API_URL}${path}`, { method, headers: authHeaders() });
+async function call(path: string, method: 'GET' | 'POST' = 'GET', payload?: unknown) {
+    const res = await fetch(`${API_URL}${path}`, {
+        method,
+        headers: authHeaders(),
+        body: payload === undefined ? undefined : JSON.stringify(payload),
+    });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.detail || '요청에 실패했습니다.');
     return body;
@@ -141,11 +148,12 @@ function buildOccupancy(items: Application[], facilityId: number): Map<string, D
 }
 
 function MiniMonth({
-    label, year, month, occupancy, onSelect,
+    label, year, month, occupancy, onSelect, onKeyReturn,
 }: {
     label: string; year: number; month: number;
     occupancy: Map<string, DayEntry>;
     onSelect: (entry: DayEntry) => void;
+    onKeyReturn: (reservationId: number) => void;
 }) {
     const grid = useMemo(() => {
         const leading = new Date(year, month - 1, 1).getDay();
@@ -173,31 +181,42 @@ function MiniMonth({
                     const entry = occupancy.get(iso);
                     const bar = entry?.confirmed ?? entry?.pending[0];
                     const isBarStart = bar ? bar.start_date === iso : false;
+                    const keyOut = !!entry?.confirmed?.key_number && !entry?.confirmed?.key_returned_at;
 
                     return (
-                        <button
-                            key={iso}
-                            disabled={!bar}
-                            onClick={() => entry && onSelect(entry)}
-                            className={`relative aspect-square flex flex-col items-center justify-start rounded text-[11px] pt-0.5 ${
-                                bar ? 'hover:ring-1 hover:ring-blue-300 cursor-pointer' : ''
-                            }`}
-                        >
-                            <span className="text-gray-700">{cell.getDate()}</span>
-                            {bar && (
-                                <span
-                                    className={`w-full h-1 rounded-full mt-0.5 ${
-                                        entry?.confirmed ? 'bg-blue-500' : 'bg-amber-400'
-                                    }`}
-                                />
+                        <div key={iso} className="relative aspect-square">
+                            <button
+                                disabled={!bar}
+                                onClick={() => entry && onSelect(entry)}
+                                className={`w-full h-full flex flex-col items-center justify-start rounded text-[11px] pt-0.5 ${
+                                    bar ? 'hover:ring-1 hover:ring-blue-300 cursor-pointer' : ''
+                                }`}
+                            >
+                                <span className="text-gray-700">{cell.getDate()}</span>
+                                {bar && (
+                                    <span
+                                        className={`w-full h-1 rounded-full mt-0.5 ${
+                                            entry?.confirmed ? 'bg-blue-500' : 'bg-amber-400'
+                                        }`}
+                                    />
+                                )}
+                                {bar && isBarStart && (
+                                    <span className="text-[9px] leading-tight text-gray-600 truncate w-full px-0.5">
+                                        {bar.user_name}
+                                        {!entry?.confirmed && entry && entry.pending.length > 1 && ` +${entry.pending.length - 1}`}
+                                    </span>
+                                )}
+                            </button>
+                            {keyOut && (
+                                <button
+                                    onClick={e => { e.stopPropagation(); onKeyReturn(entry!.confirmed!.id); }}
+                                    title="키불출 — 클릭하면 회수 완료 처리"
+                                    className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-amber-500 text-white flex items-center justify-center leading-none shadow ring-1 ring-white"
+                                >
+                                    <Key size={7} />
+                                </button>
                             )}
-                            {bar && isBarStart && (
-                                <span className="text-[9px] leading-tight text-gray-600 truncate w-full px-0.5">
-                                    {bar.user_name}
-                                    {!entry?.confirmed && entry && entry.pending.length > 1 && ` +${entry.pending.length - 1}`}
-                                </span>
-                            )}
-                        </button>
+                        </div>
                     );
                 })}
             </div>
@@ -215,6 +234,11 @@ export default function AdminVillaPage() {
     const [busyId, setBusyId] = useState<number | null>(null);
     const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
     const [detail, setDetail] = useState<DayEntry | null>(null);
+    const [keyInput, setKeyInput] = useState('');
+
+    useEffect(() => {
+        setKeyInput(detail?.confirmed?.key_number ?? '');
+    }, [detail]);
 
     const load = useCallback(async () => {
         try {
@@ -236,17 +260,32 @@ export default function AdminVillaPage() {
 
     useEffect(() => { load(); }, [load]);
 
-    const act = async (id: number, path: string, okText: string) => {
+    const act = async (id: number, path: string, okText: string, payload?: unknown): Promise<boolean> => {
         setBusyId(id);
         setMessage(null);
         try {
-            const body = await call(path, 'POST');
+            const body = await call(path, 'POST', payload);
             setMessage({ type: 'ok', text: body.message || okText });
             await load();
+            return true;
         } catch (e) {
             setMessage({ type: 'err', text: e instanceof Error ? e.message : '처리에 실패했습니다.' });
+            return false;
         } finally {
             setBusyId(null);
+        }
+    };
+
+    // 성공 시 모달을 닫는다 — 이관된 detail 스냅샷이 새로 불러온 data와 어긋나는 걸 피한다.
+    const issueKey = async (id: number, keyNumber: string) => {
+        if (await act(id, `/api/villa/admin/key/${id}`, '키 불출을 기록했습니다.', { key_number: keyNumber })) {
+            setDetail(null);
+        }
+    };
+
+    const returnKey = async (id: number) => {
+        if (await act(id, `/api/villa/admin/key-return/${id}`, '키 회수를 완료했습니다.')) {
+            setDetail(null);
         }
     };
 
@@ -423,11 +462,11 @@ export default function AdminVillaPage() {
                         return (
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <MiniMonth label="이번달" year={months.current.year} month={months.current.month}
-                                    occupancy={occupancy} onSelect={setDetail} />
+                                    occupancy={occupancy} onSelect={setDetail} onKeyReturn={returnKey} />
                                 <MiniMonth label="선착순예약월" year={months.open.year} month={months.open.month}
-                                    occupancy={occupancy} onSelect={setDetail} />
+                                    occupancy={occupancy} onSelect={setDetail} onKeyReturn={returnKey} />
                                 <MiniMonth label="예약신청대상월" year={months.target.year} month={months.target.month}
-                                    occupancy={occupancy} onSelect={setDetail} />
+                                    occupancy={occupancy} onSelect={setDetail} onKeyReturn={returnKey} />
                             </div>
                         );
                     })()}
@@ -438,6 +477,12 @@ export default function AdminVillaPage() {
                         </span>
                         <span className="flex items-center gap-1.5">
                             <span className="w-3 h-1 rounded-full bg-amber-400" /> 신청중
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 flex items-center justify-center">
+                                <Key size={7} className="text-white" />
+                            </span>
+                            키불출 (클릭하면 회수 완료)
                         </span>
                         <span>날짜를 클릭하면 예약 정보를 볼 수 있습니다</span>
                     </div>
@@ -594,6 +639,55 @@ export default function AdminVillaPage() {
                                     <p className="text-xs text-orange-600 bg-orange-50 rounded-lg px-2 py-1">
                                         취소 사유: {a.cancel_reason}
                                     </p>
+                                )}
+
+                                {a === detail.confirmed && (
+                                    <div className="pt-2 mt-1 border-t border-gray-100 space-y-2">
+                                        <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700">
+                                            <Key size={13} className="text-amber-600" /> 키 관리
+                                            {a.key_number && !a.key_returned_at && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-700">
+                                                    키불출중
+                                                </span>
+                                            )}
+                                            {a.key_returned_at && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-700">
+                                                    회수완료
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <input
+                                                value={keyInput}
+                                                onChange={e => setKeyInput(e.target.value)}
+                                                placeholder="키번호 입력"
+                                                className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <button
+                                                onClick={() => issueKey(a.id, keyInput)}
+                                                disabled={busyId === a.id || !keyInput.trim()}
+                                                className="px-3 py-1.5 text-xs font-bold text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:bg-gray-300 disabled:cursor-not-allowed shrink-0"
+                                            >
+                                                {a.key_number ? '재불출' : '불출 등록'}
+                                            </button>
+                                            {a.key_number && !a.key_returned_at && (
+                                                <button
+                                                    onClick={() => returnKey(a.id)}
+                                                    disabled={busyId === a.id}
+                                                    className="px-3 py-1.5 text-xs font-bold text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 disabled:opacity-50 shrink-0"
+                                                >
+                                                    회수 완료
+                                                </button>
+                                            )}
+                                        </div>
+                                        {a.key_number && (
+                                            <p className="text-[11px] text-gray-400">
+                                                {a.key_returned_at
+                                                    ? `${a.key_number} · ${new Date(a.key_returned_at).toLocaleString('ko-KR')} 회수`
+                                                    : `${a.key_number} · ${a.key_issued_at ? new Date(a.key_issued_at).toLocaleString('ko-KR') : ''} 불출`}
+                                            </p>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         ))}

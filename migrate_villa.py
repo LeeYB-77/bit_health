@@ -94,6 +94,11 @@ SQL_COMMANDS = [
     # 확정 후 추가 입력사항에 현장 연락처 추가
     "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS contact_phone VARCHAR;",
 
+    # 키 불출/회수 관리
+    "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS key_number VARCHAR;",
+    "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS key_issued_at TIMESTAMP;",
+    "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS key_returned_at TIMESTAMP;",
+
     # 3. 별장 시설 시드 (정원 20명)
     """
     INSERT INTO facilities (name, type, capacity)

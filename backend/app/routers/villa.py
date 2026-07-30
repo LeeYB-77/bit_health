@@ -861,6 +861,10 @@ def _serialize_application(r, usage_counts):
         "child_count": r.child_count,
         "contact_phone": r.contact_phone,
         "cancel_reason": r.cancel_reason,
+        # 키 불출/회수
+        "key_number": r.key_number,
+        "key_issued_at": r.key_issued_at,
+        "key_returned_at": r.key_returned_at,
     }
 
 
@@ -1130,6 +1134,57 @@ def reject_cancel(
 
     villa_notify.notify_cancel_rejected(db, reservation)
     return {"message": "취소 요청을 반려했습니다. 예약이 유지됩니다."}
+
+
+@router.post("/admin/key/{reservation_id}")
+def issue_villa_key(
+    reservation_id: int,
+    payload: schemas.VillaKeyIssue,
+    current_user: models.User = Depends(auth.get_current_villa_manager),
+    db: Session = Depends(get_db),
+):
+    """키 불출을 기록한다. 확정된 예약에만 가능하며, 다시 저장하면 회수 기록이 지워지고 재불출로 취급한다."""
+    reservation = db.query(models.VillaReservation).filter(
+        models.VillaReservation.id == reservation_id
+    ).first()
+    if not reservation:
+        raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
+    if reservation.status not in BLOCKING_STATUSES:
+        raise HTTPException(status_code=400, detail="확정된 예약만 키 불출을 기록할 수 있습니다.")
+
+    key_number = payload.key_number.strip()
+    if not key_number:
+        raise HTTPException(status_code=400, detail="키번호를 입력해 주세요.")
+
+    reservation.key_number = key_number
+    reservation.key_issued_at = datetime.now()
+    reservation.key_returned_at = None
+    db.commit()
+
+    return {"message": "키 불출을 기록했습니다."}
+
+
+@router.post("/admin/key-return/{reservation_id}")
+def return_villa_key(
+    reservation_id: int,
+    current_user: models.User = Depends(auth.get_current_villa_manager),
+    db: Session = Depends(get_db),
+):
+    """키 회수 처리. 캘린더의 '키불출' 배지를 클릭하면 호출된다."""
+    reservation = db.query(models.VillaReservation).filter(
+        models.VillaReservation.id == reservation_id
+    ).first()
+    if not reservation:
+        raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
+    if not reservation.key_number:
+        raise HTTPException(status_code=400, detail="불출된 키가 없습니다.")
+    if reservation.key_returned_at is not None:
+        raise HTTPException(status_code=400, detail="이미 회수 처리된 키입니다.")
+
+    reservation.key_returned_at = datetime.now()
+    db.commit()
+
+    return {"message": "키 회수를 완료했습니다."}
 
 
 @router.post("/admin/notify/{round_id}")

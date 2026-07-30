@@ -390,3 +390,122 @@ def test_회차_관리는_관리자_전용(client, facilities, make_user, auth_h
     assert client.get("/api/villa/admin/rounds", headers=headers).status_code == 400
     assert client.post("/api/villa/admin/rounds", headers=headers,
                        json={"target_year": 2027, "target_month": 3}).status_code == 400
+
+
+# --- 키 불출/회수 ---
+
+def test_키불출_기록(client, db, facilities, make_user, auth_headers):
+    villa = facilities["cheongpyeong"]
+    row = _seed(db, make_user(), villa, _in_target_month(10), _in_target_month(12), status="confirmed")
+
+    res = client.post(f"/api/villa/admin/key/{row.id}", headers=auth_headers(_admin(make_user)),
+                      json={"key_number": "K-07"})
+    assert res.status_code == 200
+
+    db.refresh(row)
+    assert row.key_number == "K-07"
+    assert row.key_issued_at is not None
+    assert row.key_returned_at is None
+
+
+def test_확정_상태가_아니면_키불출_거부(client, db, facilities, make_user, auth_headers):
+    row = _seed(db, make_user(), facilities["cheongpyeong"],
+                _in_target_month(10), _in_target_month(12), status="applied")
+    res = client.post(f"/api/villa/admin/key/{row.id}", headers=auth_headers(_admin(make_user)),
+                      json={"key_number": "K-07"})
+    assert res.status_code == 400
+
+
+def test_키번호_공백만_입력하면_400(client, db, facilities, make_user, auth_headers):
+    row = _seed(db, make_user(), facilities["cheongpyeong"],
+                _in_target_month(10), _in_target_month(12), status="confirmed")
+    res = client.post(f"/api/villa/admin/key/{row.id}", headers=auth_headers(_admin(make_user)),
+                      json={"key_number": "   "})
+    assert res.status_code == 400
+
+
+def test_키회수_처리(client, db, facilities, make_user, auth_headers):
+    villa = facilities["cheongpyeong"]
+    row = _seed(db, make_user(), villa, _in_target_month(10), _in_target_month(12), status="confirmed")
+    admin_headers = auth_headers(_admin(make_user))
+    client.post(f"/api/villa/admin/key/{row.id}", headers=admin_headers, json={"key_number": "K-07"})
+
+    res = client.post(f"/api/villa/admin/key-return/{row.id}", headers=admin_headers)
+    assert res.status_code == 200
+
+    db.refresh(row)
+    assert row.key_returned_at is not None
+    assert row.key_number == "K-07", "회수해도 어떤 키였는지 기록은 남긴다"
+
+
+def test_불출된_키가_없으면_회수_거부(client, db, facilities, make_user, auth_headers):
+    row = _seed(db, make_user(), facilities["cheongpyeong"],
+                _in_target_month(10), _in_target_month(12), status="confirmed")
+    res = client.post(f"/api/villa/admin/key-return/{row.id}", headers=auth_headers(_admin(make_user)))
+    assert res.status_code == 400
+
+
+def test_이미_회수된_키는_다시_회수_거부(client, db, facilities, make_user, auth_headers):
+    row = _seed(db, make_user(), facilities["cheongpyeong"],
+                _in_target_month(10), _in_target_month(12), status="confirmed")
+    admin_headers = auth_headers(_admin(make_user))
+    client.post(f"/api/villa/admin/key/{row.id}", headers=admin_headers, json={"key_number": "K-07"})
+    client.post(f"/api/villa/admin/key-return/{row.id}", headers=admin_headers)
+
+    res = client.post(f"/api/villa/admin/key-return/{row.id}", headers=admin_headers)
+    assert res.status_code == 400
+
+
+def test_재불출하면_회수기록_초기화(client, db, facilities, make_user, auth_headers):
+    """반납 후 다음 이용자에게 같은 예약 슬롯으로 다시 키를 내주는 경우(재불출)를 지원한다."""
+    row = _seed(db, make_user(), facilities["cheongpyeong"],
+                _in_target_month(10), _in_target_month(12), status="confirmed")
+    admin_headers = auth_headers(_admin(make_user))
+    client.post(f"/api/villa/admin/key/{row.id}", headers=admin_headers, json={"key_number": "K-07"})
+    client.post(f"/api/villa/admin/key-return/{row.id}", headers=admin_headers)
+
+    res = client.post(f"/api/villa/admin/key/{row.id}", headers=admin_headers, json={"key_number": "K-08"})
+    assert res.status_code == 200
+
+    db.refresh(row)
+    assert row.key_number == "K-08"
+    assert row.key_returned_at is None
+
+
+def test_키관리는_관리자_전용(client, db, facilities, make_user, auth_headers):
+    row = _seed(db, make_user(), facilities["cheongpyeong"],
+                _in_target_month(10), _in_target_month(12), status="confirmed")
+    headers = auth_headers(make_user())
+    assert client.post(f"/api/villa/admin/key/{row.id}", headers=headers,
+                       json={"key_number": "K-07"}).status_code == 400
+    assert client.post(f"/api/villa/admin/key-return/{row.id}", headers=headers).status_code == 400
+
+
+def test_없는_예약_키관리는_404(client, facilities, make_user, auth_headers):
+    headers = auth_headers(_admin(make_user))
+    assert client.post("/api/villa/admin/key/99999", headers=headers,
+                       json={"key_number": "K-07"}).status_code == 404
+    assert client.post("/api/villa/admin/key-return/99999", headers=headers).status_code == 404
+
+
+def test_별장_위임_관리자도_키관리_가능(client, db, facilities, make_user, auth_headers):
+    manager = make_user(role="user", is_villa_admin=True)
+    row = _seed(db, make_user(), facilities["cheongpyeong"],
+                _in_target_month(10), _in_target_month(12), status="confirmed")
+
+    res = client.post(f"/api/villa/admin/key/{row.id}", headers=auth_headers(manager),
+                      json={"key_number": "K-07"})
+    assert res.status_code == 200
+
+
+def test_신청목록_응답에_키정보_포함(client, db, facilities, make_user, auth_headers):
+    villa = facilities["cheongpyeong"]
+    row = _seed(db, make_user(), villa, _in_target_month(10), _in_target_month(12), status="confirmed")
+    admin_headers = auth_headers(_admin(make_user))
+    client.post(f"/api/villa/admin/key/{row.id}", headers=admin_headers, json={"key_number": "K-07"})
+
+    body = client.get("/api/villa/admin/applications", headers=admin_headers).json()
+    confirmed = next(c for c in body["confirmed"] if c["id"] == row.id)
+    assert confirmed["key_number"] == "K-07"
+    assert confirmed["key_issued_at"] is not None
+    assert confirmed["key_returned_at"] is None

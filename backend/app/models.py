@@ -141,6 +141,11 @@ class VillaReservation(Base):
     checkout_checklist_notes = Column(Text, nullable=True)    # 특이사항
     checkout_checklist_submitted_at = Column(DateTime, nullable=True)
 
+    # 키 불출/회수 관리 (관리자 전용). key_number가 있고 key_returned_at이 비어 있으면 "키불출" 상태.
+    key_number = Column(String, nullable=True)
+    key_issued_at = Column(DateTime, nullable=True)
+    key_returned_at = Column(DateTime, nullable=True)
+
     # users를 세 번 참조하므로 foreign_keys를 명시해야 한다.
     user = relationship("User", foreign_keys=[user_id])
     facility = relationship("Facility")
