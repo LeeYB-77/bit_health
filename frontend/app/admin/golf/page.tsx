@@ -42,7 +42,10 @@ export default function AdminGolfPage() {
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     useEffect(() => {
-        const today = new Date().toISOString().split('T')[0];
+        // toISOString()은 UTC 기준이라 보정 없이 쓰면 자정~오전 9시(KST) 사이에 어제 날짜가 나온다.
+        const now = new Date();
+        const offset = now.getTimezoneOffset() * 60000;
+        const today = new Date(now.getTime() - offset).toISOString().split('T')[0];
         setDate(today);
         fetchSettings();
     }, []);

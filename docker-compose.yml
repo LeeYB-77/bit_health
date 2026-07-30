@@ -8,6 +8,11 @@ services:
       POSTGRES_USER: bit_health_user
       POSTGRES_PASSWORD: bit_health_password
       POSTGRES_DB: bit_health_db
+      # 앱 코드는 지금 Postgres의 now()/CURRENT_TIMESTAMP를 쓰지 않아 당장 문제는
+      # 없지만, 나중에 server_default=func.now()나 raw SQL NOW()가 추가되면
+      # DB 컨테이너가 UTC 기본값이라 KST(naive) 컬럼에 값이 섞여 들어갈 수 있다.
+      # 방어적으로 backend/frontend와 동일하게 맞춰 둔다.
+      TZ: Asia/Seoul
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
