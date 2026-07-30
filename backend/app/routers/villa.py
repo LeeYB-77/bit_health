@@ -777,6 +777,7 @@ def _notify_admins_cancel_request(db: Session, reservation, applicant):
                 villa_name=villa_name,
                 period=period,
                 reason=reservation.cancel_reason,
+                admin_url=villa_notify.admin_villa_url(),
             )
         except Exception as e:
             print(f"Failed to notify admin {admin.id} of villa cancel request: {e}")

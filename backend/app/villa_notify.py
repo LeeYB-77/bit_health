@@ -25,6 +25,16 @@ def checkout_url(reservation_id: int) -> str:
     return f"{PUBLIC_BASE_URL.rstrip('/')}/villa/checkout/{reservation_id}"
 
 
+def admin_villa_url() -> str:
+    return f"{PUBLIC_BASE_URL.rstrip('/')}/admin/villa"
+
+
+def _admin_link_lines() -> tuple:
+    """관리자 알림 끝에 붙이는 관리자 페이지 링크. (slack용, mail용) 문구를 튜플로 반환한다."""
+    url = admin_villa_url()
+    return f"\n👉 <{url}|[관리자 페이지]>", f"\n[관리자 페이지] {url}\n"
+
+
 # 1박 5만원, 이후 1박마다 3만원 추가 (예: 3박 = 5+3+3 = 11만원)
 FEE_FIRST_NIGHT = 50000
 FEE_EXTRA_NIGHT = 30000
@@ -223,6 +233,7 @@ def notify_admins_checkout_submitted(db: Session, reservation, checklist_items, 
         lines.append(f"{mark} {item['label']}")
     checklist_block = "\n".join(lines)
     notes_block = f"\n\n📝 *특이사항*\n{notes}" if notes else ""
+    admin_slack_link, admin_mail_link = _admin_link_lines()
 
     slack_message = (
         f"🧹 *[{villa} 퇴실 체크사항 제출]*\n\n"
@@ -230,12 +241,14 @@ def notify_admins_checkout_submitted(db: Session, reservation, checklist_items, 
         f"• *기간*: {period}\n\n"
         f"{checklist_block}"
         f"{notes_block}"
+        f"{admin_slack_link}"
     )
     mail_body = (
         f"{applicant} 님이 {villa} 퇴실 체크사항을 제출했습니다.\n\n"
         f"기간: {period}\n\n"
         + "\n".join(f"[{'V' if done else ' '}] {item['label']}" for item, done in zip(checklist_items, checked))
         + (f"\n\n특이사항: {notes}\n" if notes else "\n")
+        + admin_mail_link
     )
     return _notify_admins(db, f"[BIT] {villa} 퇴실 체크사항 제출 ({applicant})", slack_message, mail_body)
 
@@ -327,6 +340,8 @@ def notify_admins_new_application(db: Session, reservation, is_open_booking: boo
         title = "새 예약 신청"
         detail = "정규예약 접수중입니다. 마감 후 관리자 페이지에서 확정 처리를 해주세요."
 
+    admin_slack_link, admin_mail_link = _admin_link_lines()
+
     slack_message = (
         f"📋 *[비트별장 {title}]*\n\n"
         f"*{applicant}*{dept} 님이 신청했습니다.\n"
@@ -334,6 +349,7 @@ def notify_admins_new_application(db: Session, reservation, is_open_booking: boo
         f"• *기간*: {period}\n"
         f"• *인원*: {reservation.participant_count}명\n\n"
         f"{detail}"
+        f"{admin_slack_link}"
     )
     mail_body = (
         f"{applicant}{dept} 님이 비트별장을 신청했습니다.\n\n"
@@ -341,6 +357,7 @@ def notify_admins_new_application(db: Session, reservation, is_open_booking: boo
         f"- 기간: {period}\n"
         f"- 인원: {reservation.participant_count}명\n\n"
         f"{detail}\n"
+        + admin_mail_link
     )
     return _notify_admins(db, f"[BIT] 비트별장 {title}", slack_message, mail_body)
 
@@ -348,16 +365,19 @@ def notify_admins_new_application(db: Session, reservation, is_open_booking: boo
 def notify_admins_deadline_soon(db: Session, booking_round, pending_count: int) -> int:
     """접수 마감이 임박했음을 관리자에게 알린다."""
     label = f"{booking_round.target_year}년 {booking_round.target_month}월"
+    admin_slack_link, admin_mail_link = _admin_link_lines()
     slack_message = (
         f"⏰ *[비트별장 정규예약 마감 임박]*\n\n"
         f"*{label}* 대상 접수가 {booking_round.apply_end}에 마감됩니다.\n"
         f"• *대기 중인 신청*: {pending_count}건\n\n"
         f"마감 후 확정 처리를 완료해야 결과가 통보됩니다."
+        f"{admin_slack_link}"
     )
     mail_body = (
         f"{label} 대상 비트별장 정규예약 접수가 {booking_round.apply_end}에 마감됩니다.\n"
         f"대기 중인 신청: {pending_count}건\n\n"
         f"마감 후 관리자 페이지에서 확정 처리를 완료해 주세요.\n"
+        + admin_mail_link
     )
     return _notify_admins(db, f"[BIT] 비트별장 {label} 접수 마감 임박", slack_message, mail_body)
 
@@ -365,18 +385,21 @@ def notify_admins_deadline_soon(db: Session, booking_round, pending_count: int) 
 def notify_admins_notify_blocked(db: Session, booking_round, pending_count: int) -> int:
     """통보일이 지났는데 미확정 경합이 남아 통보를 보류했음을 알린다."""
     label = f"{booking_round.target_year}년 {booking_round.target_month}월"
+    admin_slack_link, admin_mail_link = _admin_link_lines()
     slack_message = (
         f"🚨 *[비트별장 결과 통보 보류]*\n\n"
         f"*{label}* 대상 통보일({booking_round.notify_date})이 지났지만 "
         f"확정되지 않은 신청이 *{pending_count}건* 남아 있습니다.\n\n"
         f"임의로 선정하지 않고 통보를 보류했습니다. "
         f"관리자 페이지에서 확정을 마치면 결과가 발송됩니다."
+        f"{admin_slack_link}"
     )
     mail_body = (
         f"{label} 대상 비트별장 결과 통보가 보류되었습니다.\n\n"
         f"통보일: {booking_round.notify_date}\n"
         f"미확정 신청: {pending_count}건\n\n"
         f"임의 선정을 하지 않는 정책이므로, 관리자 페이지에서 확정을 마쳐 주세요.\n"
+        + admin_mail_link
     )
     return _notify_admins(db, f"[BIT] 비트별장 {label} 결과 통보 보류", slack_message, mail_body)
 
