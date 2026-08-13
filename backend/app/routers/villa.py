@@ -1,5 +1,6 @@
 # 비트별장(청평별장/동비재) 예약 신청·조회 API
 import calendar
+import copy
 import json
 from datetime import date, datetime, timedelta
 
@@ -47,7 +48,26 @@ def get_villa_settings_data(db: Session) -> dict:
     ).first()
     if setting:
         return json.loads(setting.value)
-    return DEFAULT_VILLA_SETTINGS
+    # 호출자가 반환값에 값을 넣어 저장하는 경로가 있어(관리실 메일 설정) 사본을 준다.
+    # 원본을 그대로 주면 프로세스가 살아 있는 동안 기본값이 오염된다.
+    return copy.deepcopy(DEFAULT_VILLA_SETTINGS)
+
+
+def save_villa_settings_data(db: Session, settings: dict) -> None:
+    setting = db.query(models.SystemSetting).filter(
+        models.SystemSetting.key == "villa_settings"
+    ).first()
+    value = json.dumps(settings, ensure_ascii=False)
+    if setting:
+        setting.value = value
+    else:
+        db.add(models.SystemSetting(key="villa_settings", value=value))
+    db.commit()
+
+
+def parking_office_email(db: Session) -> str | None:
+    """주차등록 요청 메일을 받을 관리실 주소. 관리자가 설정하기 전에는 None이다."""
+    return (get_villa_settings_data(db).get("parking_office_email") or "").strip() or None
 
 
 # --- 날짜 계산 헬퍼 ---
@@ -663,7 +683,68 @@ def update_extra_info(
             f"변경이 필요하면 관리팀에 알려 주세요."
         )
 
-    return {"message": "추가 정보를 저장했습니다.", "warning": warning, **_extra_info_payload(reservation)}
+    return {
+        "message": "추가 정보를 저장했습니다.",
+        "warning": warning,
+        # 초안을 함께 돌려주면 이용자가 저장 직후 내용을 확인·수정해 발송할 수 있다.
+        "parking_mail": _parking_mail_draft_for(db, reservation),
+        **_extra_info_payload(reservation),
+    }
+
+
+def _parking_mail_draft_for(db: Session, reservation) -> dict | None:
+    """
+    주차등록 요청 메일 초안. 동비재만 대상이고, 차량이 없거나 관리실 주소가
+    설정되지 않았으면 보낼 것이 없으므로 None을 준다.
+    """
+    if not reservation.facility or reservation.facility.name != villa_notify.PARKING_MAIL_VILLA:
+        return None
+    if not reservation.vehicle_numbers:
+        return None
+    office_email = parking_office_email(db)
+    if not office_email:
+        return None
+    return {"to": office_email, **villa_notify.parking_mail_draft(reservation)}
+
+
+@router.post("/{reservation_id}/parking-mail")
+def send_parking_mail(
+    reservation_id: int,
+    payload: schemas.VillaParkingMailSend,
+    current_user: models.User = Depends(auth.get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    이용자가 확인·수정한 주차등록 요청 메일을 관리실로 보낸다.
+    받는 주소는 관리자 설정값만 쓴다 — 클라이언트가 수신자를 정하게 하면 메일 릴레이가 된다.
+    """
+    reservation = _get_own_reservation_or_error(db, reservation_id, current_user)
+    if reservation.status != "confirmed":
+        raise HTTPException(status_code=400, detail="확정된 예약만 주차등록을 요청할 수 있습니다.")
+    if not reservation.facility or reservation.facility.name != villa_notify.PARKING_MAIL_VILLA:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{villa_notify.PARKING_MAIL_VILLA} 예약만 주차등록 요청 대상입니다.",
+        )
+
+    office_email = parking_office_email(db)
+    if not office_email:
+        raise HTTPException(
+            status_code=400,
+            detail="관리실 메일 주소가 설정되지 않았습니다. 관리자에게 문의해 주세요.",
+        )
+
+    subject = payload.subject.strip()
+    body = payload.body.strip()
+    if not subject or not body:
+        raise HTTPException(status_code=400, detail="메일 제목과 내용을 입력해 주세요.")
+
+    try:
+        villa_notify.send_parking_mail(db, office_email, subject, body)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"메일 발송에 실패했습니다. ({e})")
+
+    return {"message": f"관리실({office_email})로 주차등록 요청 메일을 보냈습니다."}
 
 
 # --- 이용안내 / 퇴실 체크사항 ---
@@ -1135,6 +1216,32 @@ def reject_cancel(
 
     villa_notify.notify_cancel_rejected(db, reservation)
     return {"message": "취소 요청을 반려했습니다. 예약이 유지됩니다."}
+
+
+@router.get("/admin/settings")
+def get_villa_admin_settings(
+    current_user: models.User = Depends(auth.get_current_villa_manager),
+    db: Session = Depends(get_db),
+):
+    return {"parking_office_email": parking_office_email(db) or ""}
+
+
+@router.post("/admin/settings")
+def update_villa_admin_settings(
+    payload: schemas.VillaAdminSettingsUpdate,
+    current_user: models.User = Depends(auth.get_current_villa_manager),
+    db: Session = Depends(get_db),
+):
+    """관리실 메일 주소를 저장한다. 빈 값으로 저장하면 주차등록 메일 안내가 나타나지 않는다."""
+    email = payload.parking_office_email.strip()
+    if email and "@" not in email:
+        raise HTTPException(status_code=400, detail="메일 주소 형식이 올바르지 않습니다.")
+
+    settings = get_villa_settings_data(db)
+    settings["parking_office_email"] = email
+    save_villa_settings_data(db, settings)
+
+    return {"message": "관리실 메일 주소를 저장했습니다.", "parking_office_email": email}
 
 
 @router.post("/admin/key/{reservation_id}")

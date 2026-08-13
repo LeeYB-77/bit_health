@@ -111,6 +111,16 @@ class VillaKeyIssue(BaseModel):
     key_number: str
 
 
+class VillaParkingMailSend(BaseModel):
+    """이용자가 확인·수정한 관리실 주차등록 요청 메일. 수신자는 관리자 설정값만 쓴다."""
+    subject: str
+    body: str
+
+
+class VillaAdminSettingsUpdate(BaseModel):
+    parking_office_email: str = ""   # 빈 문자열이면 주차등록 메일 기능을 쓰지 않는다
+
+
 class VillaChecklistSubmit(BaseModel):
     """퇴실 체크사항 제출. checked는 별장별 체크리스트 항목과 같은 길이의 불리언 배열이어야 한다."""
     checked: List[bool]

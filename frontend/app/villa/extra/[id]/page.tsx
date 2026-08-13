@@ -3,8 +3,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, Car, CheckCircle, Loader2, Phone, Users, X } from 'lucide-react';
-import { getVillaExtraInfo, saveVillaExtraInfo, VillaExtraInfo } from '@/lib/api';
+import { AlertTriangle, ArrowLeft, Car, CheckCircle, Loader2, Mail, Phone, Users, X } from 'lucide-react';
+import {
+    getVillaExtraInfo, saveVillaExtraInfo, sendVillaParkingMail, VillaExtraInfo, VillaParkingMail,
+} from '@/lib/api';
 
 const MAX_VEHICLES = 10;
 
@@ -23,7 +25,11 @@ export default function VillaExtraInfoPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [saved, setSaved] = useState<{ warning: string | null } | null>(null);
+    const [saved, setSaved] = useState<{ warning: string | null; mailSent?: string } | null>(null);
+
+    // 주차등록 요청 메일 — 저장 직후 내용을 확인·수정한 뒤 발송한다(동비재만).
+    const [parkingMail, setParkingMail] = useState<VillaParkingMail | null>(null);
+    const [sending, setSending] = useState(false);
 
     const load = useCallback(async () => {
         try {
@@ -72,6 +78,11 @@ export default function VillaExtraInfoPage() {
     const mismatch = !!info && total !== info.participant_count;
     const contactPhoneMissing = contactPhone.trim() === '';
 
+    // 저장이 끝나면 입력 화면을 닫는다. 결과를 잠깐 보여준 뒤 예약 목록으로 돌아간다.
+    const closeSoon = (delay = 1200) => {
+        setTimeout(() => router.push('/villa'), delay);
+    };
+
     const save = async () => {
         if (!info || contactPhoneMissing) return;
         setSaving(true);
@@ -87,11 +98,41 @@ export default function VillaExtraInfoPage() {
             });
             setSaved({ warning: result.warning ?? null });
             setInfo(result);
+            if (result.parking_mail) {
+                setParkingMail(result.parking_mail);
+            } else {
+                closeSoon();
+            }
         } catch (e) {
             setError(e instanceof Error ? e.message : '저장에 실패했습니다.');
         } finally {
             setSaving(false);
         }
+    };
+
+    const sendParkingMail = async () => {
+        if (!info || !parkingMail) return;
+        setSending(true);
+        setError(null);
+        try {
+            const res = await sendVillaParkingMail(info.id, {
+                subject: parkingMail.subject,
+                body: parkingMail.body,
+            });
+            setParkingMail(null);
+            setSaved(prev => ({ warning: prev?.warning ?? null, mailSent: res.message }));
+            closeSoon(2000);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : '메일 발송에 실패했습니다.');
+        } finally {
+            setSending(false);
+        }
+    };
+
+    // 발송하지 않고 닫는 것도 허용한다 — 입력 내용은 이미 저장됐다.
+    const skipParkingMail = () => {
+        setParkingMail(null);
+        closeSoon();
     };
 
     if (loading) return (
@@ -154,6 +195,7 @@ export default function VillaExtraInfoPage() {
                                 {saved.warning ? <AlertTriangle size={18} className="shrink-0 mt-0.5" /> : <CheckCircle size={18} className="shrink-0 mt-0.5" />}
                                 <span className="flex-1">
                                     {saved.warning ?? '저장되었습니다. 즐거운 이용 되세요.'}
+                                    {saved.mailSent && <span className="block mt-1">{saved.mailSent}</span>}
                                 </span>
                             </div>
                         )}
@@ -266,6 +308,70 @@ export default function VillaExtraInfoPage() {
                     </>
                 )}
             </main>
+
+            {/* 주차등록 요청 메일 — 관리실로 나가기 전에 내용을 확인·수정한다 */}
+            {parkingMail && (
+                <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center sm:p-4">
+                    <div className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[92vh] overflow-y-auto">
+                        <div className="sticky top-0 bg-white px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+                            <Mail size={18} className="text-blue-600" />
+                            <h2 className="font-bold text-gray-900">주차등록 요청 메일</h2>
+                            <button onClick={skipParkingMail} className="ml-auto text-gray-400">
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div className="p-4 space-y-3">
+                            <p className="text-xs text-gray-600 bg-blue-50 rounded-lg px-3 py-2">
+                                받는 곳 <span className="font-bold">{parkingMail.to}</span>
+                                <span className="block mt-0.5 text-gray-500">
+                                    내용을 확인하고 필요하면 수정한 뒤 발송해 주세요.
+                                </span>
+                            </p>
+
+                            <label className="block">
+                                <span className="text-xs font-bold text-gray-600">제목</span>
+                                <input
+                                    value={parkingMail.subject}
+                                    onChange={e => setParkingMail(prev =>
+                                        prev && { ...prev, subject: e.target.value })}
+                                    className={inputCls}
+                                />
+                            </label>
+
+                            <label className="block">
+                                <span className="text-xs font-bold text-gray-600">내용</span>
+                                <textarea
+                                    rows={11}
+                                    value={parkingMail.body}
+                                    onChange={e => setParkingMail(prev =>
+                                        prev && { ...prev, body: e.target.value })}
+                                    className={`${inputCls} leading-relaxed`}
+                                />
+                            </label>
+
+                            <div className="flex gap-2 pt-1">
+                                <button
+                                    onClick={skipParkingMail}
+                                    disabled={sending}
+                                    className="px-4 py-3 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 disabled:opacity-50"
+                                >
+                                    발송 없이 닫기
+                                </button>
+                                <button
+                                    onClick={sendParkingMail}
+                                    disabled={sending || !parkingMail.subject.trim() || !parkingMail.body.trim()}
+                                    className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {sending
+                                        ? <Loader2 size={18} className="animate-spin" />
+                                        : <><Mail size={16} /> 발송하기</>}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

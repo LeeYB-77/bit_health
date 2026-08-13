@@ -94,6 +94,15 @@ SQL_COMMANDS = [
     # 확정 후 추가 입력사항에 현장 연락처 추가
     "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS contact_phone VARCHAR;",
 
+    # 주차등록 요청 메일을 받을 관리실 주소의 초기값.
+    # 이미 값이 있으면 건드리지 않는다 — 관리자가 화면에서 바꾼 주소를 되돌리면 안 된다.
+    """
+    UPDATE system_settings
+    SET value = jsonb_set(value::jsonb, '{parking_office_email}', '"lyb77@bit.kr"')::text
+    WHERE key = 'villa_settings'
+      AND (value::jsonb -> 'parking_office_email') IS NULL;
+    """,
+
     # 키 불출/회수 관리
     "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS key_number VARCHAR;",
     "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS key_issued_at TIMESTAMP;",

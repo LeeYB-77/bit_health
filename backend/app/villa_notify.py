@@ -35,6 +35,11 @@ def _admin_link_lines() -> tuple:
     return f"\n👉 <{url}|[관리자 페이지]>", f"\n[관리자 페이지] {url}\n"
 
 
+# 동비재 주차등록 요청 메일. 청평별장은 관리실 등록 절차가 없어 동비재만 대상이다.
+PARKING_MAIL_VILLA = "동비재"
+PARKING_MAIL_SUBJECT = "102동1201호 주차등록 부탁드립니다."
+
+
 # 1박 5만원, 이후 1박마다 3만원 추가 (예: 3박 = 5+3+3 = 11만원)
 FEE_FIRST_NIGHT = 50000
 FEE_EXTRA_NIGHT = 30000
@@ -251,6 +256,34 @@ def notify_admins_checkout_submitted(db: Session, reservation, checklist_items, 
         + admin_mail_link
     )
     return _notify_admins(db, f"[BIT] {villa} 퇴실 체크사항 제출 ({applicant})", slack_message, mail_body)
+
+
+def parking_mail_draft(reservation) -> dict:
+    """
+    관리실에 보낼 주차등록 요청 메일의 초안. 이용자가 이 내용을 확인·수정한 뒤
+    발송하므로, 여기서는 확정된 예약 정보를 그대로 채워 넣는 데까지만 한다.
+    """
+    applicant = reservation.user.name if reservation.user else "(알 수 없음)"
+    return {
+        "subject": PARKING_MAIL_SUBJECT,
+        "body": (
+            f"안녕하세요, 비트컴퓨터입니다.\n"
+            f"아래 숙소 이용자의 차량 주차등록을 부탁드립니다.\n\n"
+            f"- 이용자: {applicant}\n"
+            f"- 연락처: {reservation.contact_phone or '미입력'}\n"
+            f"- 이용기간: {_period(reservation)}\n"
+            f"- 차량번호: {reservation.vehicle_numbers or '미입력'}\n\n"
+            f"감사합니다.\n"
+        ),
+    }
+
+
+def send_parking_mail(db: Session, to_email: str, subject: str, body: str) -> None:
+    """
+    다른 통보와 달리 예외를 삼키지 않는다 — 이용자가 발송 버튼을 누르고 결과를
+    기다리는 흐름이라, 조용히 실패하면 등록이 된 줄 알고 넘어가게 된다.
+    """
+    email_utils.send_mail_or_raise(db, to_email, subject, body)
 
 
 def notify_rejected(db: Session, reservation) -> bool:

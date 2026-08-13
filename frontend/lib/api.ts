@@ -295,6 +295,14 @@ export interface VillaExtraInfo {
   submitted: boolean;
   composition_total: number;
   warning?: string | null;
+  // 동비재 + 차량번호 입력 + 관리실 주소 설정이 모두 갖춰졌을 때만 채워진다.
+  parking_mail?: VillaParkingMail | null;
+}
+
+export interface VillaParkingMail {
+  to: string;
+  subject: string;
+  body: string;
 }
 
 export const getVillaExtraInfo = async (id: number): Promise<VillaExtraInfo> => {
@@ -312,6 +320,17 @@ export const saveVillaExtraInfo = async (
   }
 ): Promise<VillaExtraInfo> => {
   return fetcher(`/api/villa/${id}/extra`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+// 이용자가 확인·수정한 주차등록 요청 메일을 관리실로 보낸다. 수신자는 서버 설정값을 쓴다.
+export const sendVillaParkingMail = async (
+  id: number,
+  data: { subject: string; body: string }
+): Promise<{ message: string }> => {
+  return fetcher(`/api/villa/${id}/parking-mail`, {
     method: 'POST',
     body: JSON.stringify(data),
   });

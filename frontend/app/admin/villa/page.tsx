@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { API_URL, getVillas, Villa } from '@/lib/api';
-import { AlertTriangle, ArrowLeft, Calendar, Check, Key, Loader2, Send, Users, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Calendar, Check, Key, Loader2, Mail, Send, Users, X } from 'lucide-react';
 
 interface Application {
     id: number;
@@ -235,6 +235,8 @@ export default function AdminVillaPage() {
     const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
     const [detail, setDetail] = useState<DayEntry | null>(null);
     const [keyInput, setKeyInput] = useState('');
+    const [officeEmail, setOfficeEmail] = useState('');
+    const [officeEmailSaving, setOfficeEmailSaving] = useState(false);
 
     useEffect(() => {
         setKeyInput(detail?.confirmed?.key_number ?? '');
@@ -259,6 +261,27 @@ export default function AdminVillaPage() {
     }, []);
 
     useEffect(() => { load(); }, [load]);
+
+    // 설정은 load()에 넣지 않는다 — 다른 작업 후 재조회가 입력 중인 주소를 되돌린다.
+    useEffect(() => {
+        call('/api/villa/admin/settings')
+            .then(res => setOfficeEmail(res.parking_office_email ?? ''))
+            .catch(() => { /* 설정을 못 읽어도 예약 관리는 계속 쓸 수 있어야 한다 */ });
+    }, []);
+
+    const saveOfficeEmail = async () => {
+        setOfficeEmailSaving(true);
+        setMessage(null);
+        try {
+            const res = await call('/api/villa/admin/settings', 'POST', { parking_office_email: officeEmail });
+            setOfficeEmail(res.parking_office_email ?? '');
+            setMessage({ type: 'ok', text: res.message });
+        } catch (e) {
+            setMessage({ type: 'err', text: e instanceof Error ? e.message : '저장에 실패했습니다.' });
+        } finally {
+            setOfficeEmailSaving(false);
+        }
+    };
 
     const act = async (id: number, path: string, okText: string, payload?: unknown): Promise<boolean> => {
         setBusyId(id);
@@ -572,6 +595,33 @@ export default function AdminVillaPage() {
                         )}
                     </div>
                 ))}
+            </section>
+
+            {/* 관리실 메일 — 동비재 주차등록 요청 메일을 받을 주소 */}
+            <section className="rounded-2xl bg-white shadow-sm border border-gray-100 p-5 space-y-3">
+                <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                    <Mail size={16} className="text-blue-600" /> 관리실 메일 주소
+                </h3>
+                <p className="text-xs text-gray-500">
+                    동비재 이용자가 이용 정보를 저장하면 이 주소로 주차등록 요청 메일을 보낼 수 있습니다.
+                    비워 두면 주차등록 메일 안내가 표시되지 않습니다.
+                </p>
+                <div className="flex gap-2">
+                    <input
+                        type="email"
+                        value={officeEmail}
+                        onChange={e => setOfficeEmail(e.target.value)}
+                        placeholder="office@example.com"
+                        className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                        onClick={saveOfficeEmail}
+                        disabled={officeEmailSaving}
+                        className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:bg-gray-300 shrink-0"
+                    >
+                        {officeEmailSaving ? <Loader2 size={16} className="animate-spin" /> : '저장'}
+                    </button>
+                </div>
             </section>
 
             {/* 예약 상세 모달 (달력에서 날짜 클릭) */}
