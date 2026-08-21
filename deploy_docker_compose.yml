@@ -15,21 +15,21 @@ services:
       TZ: Asia/Seoul
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5434:5432"
+    # 호스트 포트를 열지 않는다. 앱은 도커 네트워크 내부에서 db:5432로 접근하며,
+    # 외부에 노출하면 인터넷에서 DB로 직접 접속을 시도할 수 있다.
     restart: always
 
   backend:
     build: ./backend
     container_name: bit_health_backend
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    ports:
-      - "8002:8000"
+    # 호스트 포트를 열지 않는다. Caddy가 도커 내부에서 bit_health_backend:8000으로
+    # 리버스 프록시하므로, 8002를 열면 Caddy(HTTPS)를 우회해 평문 HTTP로 API·문서에
+    # 직접 접근할 수 있게 된다(확인된 노출면).
     environment:
       DATABASE_URL: postgresql://bit_health_user:bit_health_password@db:5432/bit_health_db
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
       SECRET_KEY: ${SECRET_KEY}
-      LEGACY_SECRET_KEY: ${LEGACY_SECRET_KEY}
       ADMIN_EMAILS: ${ADMIN_EMAILS}
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}

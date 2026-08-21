@@ -1,7 +1,21 @@
 book.bit.kr {
+    # 보안 응답 헤더
+    header {
+        # HTTPS 강제(1년). 최초 방문 후 브라우저가 평문 접속을 시도하지 않는다.
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        # 클릭재킹 방지 — 다른 사이트가 iframe으로 감싸지 못하게 한다.
+        X-Frame-Options "DENY"
+        # MIME 스니핑 방지
+        X-Content-Type-Options "nosniff"
+        # 리퍼러에 경로/쿼리가 외부로 새지 않게 제한
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # 서버 소프트웨어 정보 숨김
+        -Server
+    }
+
     # 백엔드 API 라우팅
     reverse_proxy /api/* bit_health_backend:8000
-    
+
     # 그 외 모든 요청은 프론트엔드로 라우팅
     reverse_proxy * bit_health_frontend:3000
 }

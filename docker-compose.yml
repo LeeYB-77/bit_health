@@ -31,7 +31,6 @@ services:
       DATABASE_URL: postgresql://bit_health_user:bit_health_password@db:5432/bit_health_db
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
       SECRET_KEY: ${SECRET_KEY}
-      LEGACY_SECRET_KEY: ${LEGACY_SECRET_KEY}
       ADMIN_EMAILS: ${ADMIN_EMAILS}
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}

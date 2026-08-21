@@ -7,8 +7,6 @@ import os
 # 따라서 미리 sqlite로 지정하지 않으면 테스트가 PostgreSQL 접속을 시도하며 실패한다.
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ.setdefault("SECRET_KEY", "test_secret_key_for_pytest")
-# 전환기 레거시 키 폴백을 검증하기 위해 테스트에서도 설정한다.
-os.environ.setdefault("LEGACY_SECRET_KEY", "legacy_test_secret_key_for_pytest")
 os.environ.setdefault("ADMIN_EMAILS", "boss@bit.kr, second-admin@bit.kr")
 # SMTP 비밀번호 암호화용. 테스트 전용 Fernet 키(32바이트 url-safe base64).
 os.environ.setdefault("SETTINGS_ENCRYPTION_KEY", "BFrPS8DP_HexSFzWnhcDk-evhABp1Yp963uKIeXcpYA=")

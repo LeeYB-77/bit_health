@@ -15,12 +15,10 @@ if not SECRET_KEY:
         ".env에 SECRET_KEY를 추가하고 docker-compose가 이를 주입하는지 확인하세요."
     )
 
-# 전환기 전용. 구 서명 키로 발급된 토큰(만료 1년)을 계속 수용해 강제 로그아웃을 막는다.
-# 기존 토큰이 자연 교체된 뒤(2~4주) 이 변수와 아래 폴백 로직을 함께 제거해야 한다.
-LEGACY_SECRET_KEY = os.getenv("LEGACY_SECRET_KEY")
-
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 365 # 1 year
+# 만료 1년은 유출 시 악용 창이 지나치게 길다. 사내 SSO 재로그인은 한 번의
+# 리다이렉트로 끝나므로 짧게 잡아도 부담이 적다. 필요하면 이 값만 조정한다.
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
@@ -37,17 +35,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 
 def _decode_token(token: str):
-    """현재 키로 검증하고, 실패하면 전환기 레거시 키로 한 번 더 시도한다."""
-    keys = [SECRET_KEY]
-    if LEGACY_SECRET_KEY:
-        keys.append(LEGACY_SECRET_KEY)
-
-    for key in keys:
-        try:
-            return jwt.decode(token, key, algorithms=[ALGORITHM])
-        except JWTError:
-            continue
-    return None
+    """현재 서명 키로만 검증한다. 다른 키로 서명된 토큰은 위조로 간주해 거부한다."""
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        return None
 
 def get_db():
     db = database.SessionLocal()

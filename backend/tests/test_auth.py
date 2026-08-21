@@ -214,17 +214,26 @@ def _sign_with(key, user, expires_in_days=365):
     )
 
 
-def test_레거시_키로_서명한_토큰도_수용(client, make_user):
-    """
-    SECRET_KEY 교체 시 만료 1년의 기존 토큰이 무효화되어 전 직원이 강제
-    로그아웃되는 것을 막는 전환기 폴백. 이 동작이 무중단 배포의 핵심이다.
-    """
-    user = make_user()
-    legacy_token = _sign_with(auth_utils.LEGACY_SECRET_KEY, user)
+# 과거 공개 저장소 이력에 노출됐던 구 서명 키. 이 키로 서명된 토큰은 반드시 거부돼야 한다.
+LEAKED_OLD_KEY = "bit_health_secret_key_2026"
 
-    res = client.get("/api/users/me", headers={"Authorization": f"Bearer {legacy_token}"})
+
+def test_현재_키로_서명한_토큰은_수용(client, make_user):
+    user = make_user()
+    token = _sign_with(auth_utils.SECRET_KEY, user)
+
+    res = client.get("/api/users/me", headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 200
     assert res.json()["name"] == user.name
+
+
+def test_구_서명키로_서명한_토큰은_거부(client, make_user):
+    """유출된 구 키로 위조한 토큰이 통과하면 관리자 인증 우회가 된다. 반드시 401."""
+    user = make_user(role="admin")
+    forged = _sign_with(LEAKED_OLD_KEY, user)
+
+    res = client.get("/api/users/me", headers={"Authorization": f"Bearer {forged}"})
+    assert res.status_code == 401
 
 
 def test_새로_발급되는_토큰은_현재_키로만_서명(client, db, mock_sso):
@@ -233,30 +242,9 @@ def test_새로_발급되는_토큰은_현재_키로만_서명(client, db, mock_
 
     # 현재 키로는 검증되고
     jose_jwt.decode(token, auth_utils.SECRET_KEY, algorithms=[auth_utils.ALGORITHM])
-    # 레거시 키로는 검증되지 않는다
+    # 다른(구) 키로는 검증되지 않는다
     with pytest.raises(JWTError):
-        jose_jwt.decode(token, auth_utils.LEGACY_SECRET_KEY, algorithms=[auth_utils.ALGORITHM])
-
-
-def test_만료된_레거시_토큰은_거부(client, make_user):
-    user = make_user()
-    expired = _sign_with(auth_utils.LEGACY_SECRET_KEY, user, expires_in_days=-1)
-    res = client.get("/api/users/me", headers={"Authorization": f"Bearer {expired}"})
-    assert res.status_code == 401
-
-
-def test_레거시_폴백_제거후에는_구토큰_거부(client, make_user, monkeypatch):
-    """
-    전환기(2~4주) 종료 후 LEGACY_SECRET_KEY를 제거했을 때의 동작을 문서화한다.
-    이 시점에만 잔여 구토큰 보유자가 재로그인한다.
-    """
-    user = make_user()
-    legacy_token = _sign_with(auth_utils.LEGACY_SECRET_KEY, user)
-
-    monkeypatch.setattr(auth_utils, "LEGACY_SECRET_KEY", None)
-
-    res = client.get("/api/users/me", headers={"Authorization": f"Bearer {legacy_token}"})
-    assert res.status_code == 401
+        jose_jwt.decode(token, LEAKED_OLD_KEY, algorithms=[auth_utils.ALGORITHM])
 
 
 def test_관리자_전용_엔드포인트는_일반사용자_거부(client, make_user, auth_headers):
