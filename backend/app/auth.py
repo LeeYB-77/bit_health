@@ -16,9 +16,7 @@ if not SECRET_KEY:
     )
 
 ALGORITHM = "HS256"
-# 만료 1년은 유출 시 악용 창이 지나치게 길다. 사내 SSO 재로그인은 한 번의
-# 리다이렉트로 끝나므로 짧게 잡아도 부담이 적다. 필요하면 이 값만 조정한다.
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 365  # 1 year
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
