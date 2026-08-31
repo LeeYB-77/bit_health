@@ -797,6 +797,7 @@ export default function AdminVillaPage() {
                         </p>
                         <p className="text-xs text-rose-600 bg-rose-50 rounded-lg px-2.5 py-2">
                             취소 사유는 이용자에게 Slack·메일로 함께 전달됩니다.
+                            {cancelTarget.facility_name === '동비재' && ' 동비재는 관리실에도 주차·입실 취소 메일이 발송됩니다.'}
                         </p>
                         <textarea
                             value={cancelReason}

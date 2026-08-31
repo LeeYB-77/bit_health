@@ -300,3 +300,114 @@ def test_발송_실패는_502로_알린다(client, db, facilities, make_user, au
     )
     assert res.status_code == 502
     assert "SMTP" in res.json()["detail"]
+
+
+# --- 취소 시 관리실 취소 메일 ---
+
+def _office_mails(sent):
+    return [m for m in sent if m["to"] == OFFICE]
+
+
+def test_동비재_담당자취소시_관리실_취소메일(client, db, facilities, make_user, auth_headers, sent):
+    manager = _villa_manager(make_user)
+    _set_office_email(client, auth_headers, manager)
+    guest = make_user(name="김취소", email="guest@bit.kr")
+    reservation = _confirmed_dongbijae(db, facilities, guest)
+    _save_extra(client, auth_headers, guest, reservation)  # 차량 등록
+
+    sent.clear()
+    res = client.post(
+        f"/api/villa/admin/cancel/{reservation.id}",
+        headers=auth_headers(manager),
+        json={"reason": "시설 보수"},
+    )
+    assert res.status_code == 200
+
+    office = _office_mails(sent)
+    assert len(office) == 1
+    assert "취소" in office[0]["subject"]
+    assert "12가3456" in office[0]["body"]     # 주차정보
+    assert "시설 보수" in office[0]["body"]     # 취소 사유
+    assert "김취소" in office[0]["body"]
+
+
+def test_동비재_신청단계_취소는_관리실_메일_없음(client, db, facilities, make_user, auth_headers, sent):
+    """applied 상태는 관리실이 인지하지 못한 예약이라 취소 메일을 보내지 않는다."""
+    manager = _villa_manager(make_user)
+    _set_office_email(client, auth_headers, manager)
+    guest = make_user(email="guest@bit.kr")
+    reservation = _seed(
+        db, guest, facilities["dongbijae"],
+        _in_target_month(10), _in_target_month(12), status="applied",
+    )
+
+    sent.clear()
+    res = client.post(
+        f"/api/villa/admin/cancel/{reservation.id}",
+        headers=auth_headers(manager),
+        json={"reason": "중복"},
+    )
+    assert res.status_code == 200
+    assert _office_mails(sent) == []
+
+
+def test_청평별장_취소는_관리실_메일_없음(client, db, facilities, make_user, auth_headers, sent):
+    manager = _villa_manager(make_user)
+    _set_office_email(client, auth_headers, manager)
+    guest = make_user(email="guest@bit.kr")
+    reservation = _seed(
+        db, guest, facilities["cheongpyeong"],
+        _in_target_month(10), _in_target_month(12), status="confirmed",
+    )
+
+    sent.clear()
+    res = client.post(
+        f"/api/villa/admin/cancel/{reservation.id}",
+        headers=auth_headers(manager),
+        json={"reason": "사유"},
+    )
+    assert res.status_code == 200
+    assert _office_mails(sent) == []
+
+
+def test_관리실주소_없으면_취소메일_없음(client, db, facilities, make_user, auth_headers, sent):
+    manager = _villa_manager(make_user)  # 관리실 주소 미설정
+    guest = make_user(email="guest@bit.kr")
+    reservation = _confirmed_dongbijae(db, facilities, guest)
+
+    sent.clear()
+    res = client.post(
+        f"/api/villa/admin/cancel/{reservation.id}",
+        headers=auth_headers(manager),
+        json={"reason": "사유"},
+    )
+    assert res.status_code == 200
+    assert _office_mails(sent) == []
+
+
+def test_동비재_취소승인시에도_관리실_취소메일(client, db, facilities, make_user, auth_headers, sent):
+    """이용자 취소 요청 → 담당자 승인 경로에서도 관리실에 취소 메일이 나간다."""
+    manager = _villa_manager(make_user)
+    _set_office_email(client, auth_headers, manager)
+    guest = make_user(email="guest@bit.kr")
+    reservation = _confirmed_dongbijae(db, facilities, guest)
+    _save_extra(client, auth_headers, guest, reservation)
+
+    # 이용자가 취소 요청
+    client.post(
+        f"/api/villa/cancel-request/{reservation.id}",
+        headers=auth_headers(guest),
+        json={"reason": "개인 사정"},
+    )
+
+    sent.clear()
+    res = client.post(
+        f"/api/villa/admin/cancel-approve/{reservation.id}",
+        headers=auth_headers(manager),
+    )
+    assert res.status_code == 200
+
+    office = _office_mails(sent)
+    assert len(office) == 1
+    assert "취소" in office[0]["subject"]
+    assert "개인 사정" in office[0]["body"]

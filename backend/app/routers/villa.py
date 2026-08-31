@@ -1188,6 +1188,7 @@ def approve_cancel(
 ):
     """승인하면 해당 기간이 풀려 다시 신청 가능해진다."""
     reservation = _get_cancel_requested_or_400(db, reservation_id)
+    cancel_reason = reservation.cancel_reason  # 통보 뒤 흔적 정리 전에 보관
     reservation.status = "canceled"
     reservation.canceled_at = datetime.now()
     reservation.canceled_by = current_user.id
@@ -1198,11 +1199,36 @@ def approve_cancel(
     db.commit()
 
     villa_notify.notify_cancel_approved(db, reservation)
-    return {"message": "취소를 승인했습니다. 해당 기간이 다시 열립니다."}
+
+    # 취소요청은 확정 예약에서만 생기므로 관리실이 인지한 건이다.
+    message = "취소를 승인했습니다. 해당 기간이 다시 열립니다."
+    office_note = _notify_office_of_villa_cancellation(db, reservation, cancel_reason or "이용자 취소 요청")
+    if office_note:
+        message = f"취소를 승인했습니다. 해당 기간이 다시 열립니다. {office_note}"
+    return {"message": message}
 
 
 # 담당자가 직접 취소할 수 있는 상태. 이미 취소·미선정된 건은 대상이 아니다.
 ADMIN_CANCELABLE_STATUSES = ("applied", "confirmed", "cancel_requested")
+
+
+def _notify_office_of_villa_cancellation(db: Session, reservation, reason: str):
+    """
+    동비재 확정 예약이 취소되면 관리실에 주차·입실 취소 메일을 보낸다.
+    관리실이 인지한 예약(확정 이상)만 대상이므로 신청(applied) 취소는 호출하지 않는다.
+    관리실 주소가 없으면 조용히 건너뛴다. (성공, 실패, 대상아님) 여부를 문자열로 돌려준다.
+    """
+    if not reservation.facility or reservation.facility.name != villa_notify.PARKING_MAIL_VILLA:
+        return None
+    office_email = parking_office_email(db)
+    if not office_email:
+        return None
+    sent = villa_notify.send_parking_cancel_mail(db, office_email, reservation, reason)
+    return (
+        f"관리실({office_email})로 주차·입실 취소 메일을 보냈습니다."
+        if sent else
+        "관리실 취소 메일 발송에는 실패했습니다. 관리실에 직접 알려 주세요."
+    )
 
 
 @router.post("/admin/cancel/{reservation_id}")
@@ -1229,6 +1255,9 @@ def admin_cancel_reservation(
     if not reason:
         raise HTTPException(status_code=400, detail="취소 사유를 입력해 주세요.")
 
+    # 관리실은 확정 예약만 인지한다. 상태를 바꾸기 전에 확정 여부를 기록해 둔다.
+    was_confirmed = reservation.status in BLOCKING_STATUSES
+
     reservation.status = "canceled"
     reservation.canceled_at = datetime.now()
     reservation.canceled_by = current_user.id
@@ -1240,7 +1269,13 @@ def admin_cancel_reservation(
     db.commit()
 
     villa_notify.notify_canceled_by_admin(db, reservation, reason)
-    return {"message": "예약을 취소했습니다. 이용자에게 통보했습니다."}
+
+    message = "예약을 취소했습니다. 이용자에게 통보했습니다."
+    if was_confirmed:
+        office_note = _notify_office_of_villa_cancellation(db, reservation, reason)
+        if office_note:
+            message = f"예약을 취소하고 이용자에게 통보했습니다. {office_note}"
+    return {"message": message}
 
 
 @router.post("/admin/cancel-reject/{reservation_id}")

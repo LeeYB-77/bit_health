@@ -38,6 +38,7 @@ def _admin_link_lines() -> tuple:
 # 동비재 주차등록 요청 메일. 청평별장은 관리실 등록 절차가 없어 동비재만 대상이다.
 PARKING_MAIL_VILLA = "동비재"
 PARKING_MAIL_SUBJECT = "102동1201호 주차등록 부탁드립니다."
+PARKING_CANCEL_SUBJECT = "102동1201호 주차등록·입실 취소 부탁드립니다."
 
 
 # 1박 5만원, 이후 1박마다 3만원 추가 (예: 3박 = 5+3+3 = 11만원)
@@ -284,6 +285,28 @@ def send_parking_mail(db: Session, to_email: str, subject: str, body: str) -> No
     기다리는 흐름이라, 조용히 실패하면 등록이 된 줄 알고 넘어가게 된다.
     """
     email_utils.send_mail_or_raise(db, to_email, subject, body)
+
+
+def parking_cancel_mail_body(reservation, reason: str) -> str:
+    applicant = reservation.user.name if reservation.user else "(알 수 없음)"
+    return (
+        f"안녕하세요, 비트컴퓨터입니다.\n"
+        f"아래 숙소 이용 예약이 취소되어, 주차등록과 입실을 취소 부탁드립니다.\n\n"
+        f"- 이용자: {applicant}\n"
+        f"- 연락처: {reservation.contact_phone or '미입력'}\n"
+        f"- 이용기간: {_period(reservation)}\n"
+        f"- 차량번호: {reservation.vehicle_numbers or '미입력'}\n"
+        f"- 취소 사유: {reason or '미기재'}\n\n"
+        f"감사합니다.\n"
+    )
+
+
+def send_parking_cancel_mail(db: Session, to_email: str, reservation, reason: str) -> bool:
+    """
+    동비재 예약이 취소될 때 관리실에 주차·입실 취소를 알린다. 취소 자체는 이미
+    끝난 뒤의 부가 통보이므로, 발송 실패가 취소를 되돌리지 않도록 예외를 삼킨다.
+    """
+    return email_utils.send_mail(db, to_email, PARKING_CANCEL_SUBJECT, parking_cancel_mail_body(reservation, reason))
 
 
 def notify_rejected(db: Session, reservation) -> bool:
