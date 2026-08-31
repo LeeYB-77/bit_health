@@ -319,6 +319,29 @@ def notify_cancel_approved(db: Session, reservation) -> bool:
     return _dispatch(db, reservation.user, f"[BIT] {villa} 예약 취소가 승인되었습니다", slack_message, mail_body)
 
 
+def notify_canceled_by_admin(db: Session, reservation, reason: str) -> bool:
+    """
+    담당자가 이용자의 예약을 직접 취소했을 때 이용자에게 보내는 통보.
+    이용자가 취소를 요청한 게 아니므로 '승인'이 아니라 '관리자 취소'로 안내하고,
+    모르고 방문하는 일이 없도록 사유를 함께 전한다.
+    """
+    villa = _villa_name(reservation)
+    period = _period(reservation)
+
+    slack_message = (
+        f"🏡 *[비트별장 예약 취소 안내]*\n\n"
+        f"*{villa}* {period} 예약이 관리자에 의해 취소되었습니다.\n"
+        f"• *사유*: {reason}\n\n"
+        f"문의가 있으시면 관리팀으로 연락해 주세요."
+    )
+    mail_body = (
+        f"{villa} {period} 예약이 관리자에 의해 취소되었습니다.\n\n"
+        f"- 사유: {reason}\n\n"
+        f"문의가 있으시면 관리팀으로 연락해 주세요.\n"
+    )
+    return _dispatch(db, reservation.user, f"[BIT] {villa} 예약이 취소되었습니다", slack_message, mail_body)
+
+
 def villa_admin_recipients(db: Session):
     """
     비트별장 관리 알림을 받을 대상. 별장 위임 관리자가 지정돼 있으면 그 담당자만

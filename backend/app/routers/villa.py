@@ -1201,6 +1201,48 @@ def approve_cancel(
     return {"message": "취소를 승인했습니다. 해당 기간이 다시 열립니다."}
 
 
+# 담당자가 직접 취소할 수 있는 상태. 이미 취소·미선정된 건은 대상이 아니다.
+ADMIN_CANCELABLE_STATUSES = ("applied", "confirmed", "cancel_requested")
+
+
+@router.post("/admin/cancel/{reservation_id}")
+def admin_cancel_reservation(
+    reservation_id: int,
+    payload: schemas.VillaAdminCancel,
+    current_user: models.User = Depends(auth.get_current_villa_manager),
+    db: Session = Depends(get_db),
+):
+    """
+    담당자가 이용자의 예약을 직접 취소한다. 이용자의 취소 요청을 기다리지 않고
+    신청·확정·취소요청 상태 모두 바로 취소할 수 있다. 사유는 필수이며 이용자에게 통보한다.
+    """
+    reservation = db.query(models.VillaReservation).filter(
+        models.VillaReservation.id == reservation_id
+    ).first()
+    if not reservation:
+        raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
+
+    if reservation.status not in ADMIN_CANCELABLE_STATUSES:
+        raise HTTPException(status_code=400, detail="이미 취소되었거나 취소할 수 없는 예약입니다.")
+
+    reason = payload.reason.strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="취소 사유를 입력해 주세요.")
+
+    reservation.status = "canceled"
+    reservation.canceled_at = datetime.now()
+    reservation.canceled_by = current_user.id
+    reservation.cancel_reason = reason
+    db.commit()
+
+    # 확정 예약이 빠지면 인접 이웃이 정규 시간 강제에서 풀릴 수 있다(다른 인접이 없다면).
+    release_boundary_times(db, reservation)
+    db.commit()
+
+    villa_notify.notify_canceled_by_admin(db, reservation, reason)
+    return {"message": "예약을 취소했습니다. 이용자에게 통보했습니다."}
+
+
 @router.post("/admin/cancel-reject/{reservation_id}")
 def reject_cancel(
     reservation_id: int,

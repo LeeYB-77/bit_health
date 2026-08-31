@@ -237,6 +237,9 @@ export default function AdminVillaPage() {
     const [keyInput, setKeyInput] = useState('');
     const [officeEmail, setOfficeEmail] = useState('');
     const [officeEmailSaving, setOfficeEmailSaving] = useState(false);
+    // 담당자 직접 취소 — 사유를 받아 확인 후 처리한다.
+    const [cancelTarget, setCancelTarget] = useState<Application | null>(null);
+    const [cancelReason, setCancelReason] = useState('');
 
     useEffect(() => {
         setKeyInput(detail?.confirmed?.key_number ?? '');
@@ -308,6 +311,19 @@ export default function AdminVillaPage() {
 
     const returnKey = async (id: number) => {
         if (await act(id, `/api/villa/admin/key-return/${id}`, '키 회수를 완료했습니다.')) {
+            setDetail(null);
+        }
+    };
+
+    const askCancel = (a: Application) => {
+        setCancelReason('');
+        setCancelTarget(a);
+    };
+
+    const doCancel = async () => {
+        if (!cancelTarget || !cancelReason.trim()) return;
+        if (await act(cancelTarget.id, `/api/villa/admin/cancel/${cancelTarget.id}`, '예약을 취소했습니다.', { reason: cancelReason.trim() })) {
+            setCancelTarget(null);
             setDetail(null);
         }
     };
@@ -575,15 +591,24 @@ export default function AdminVillaPage() {
                                         </p>
                                     </div>
 
-                                    <button
-                                        onClick={() => act(a.id, `/api/villa/admin/confirm/${a.id}`, '확정했습니다.')}
-                                        disabled={busyId === a.id}
-                                        className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5 shrink-0"
-                                    >
-                                        {busyId === a.id
-                                            ? <Loader2 size={14} className="animate-spin" />
-                                            : <><Check size={14} /> 확정</>}
-                                    </button>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <button
+                                            onClick={() => act(a.id, `/api/villa/admin/confirm/${a.id}`, '확정했습니다.')}
+                                            disabled={busyId === a.id}
+                                            className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
+                                        >
+                                            {busyId === a.id
+                                                ? <Loader2 size={14} className="animate-spin" />
+                                                : <><Check size={14} /> 확정</>}
+                                        </button>
+                                        <button
+                                            onClick={() => askCancel(a)}
+                                            disabled={busyId === a.id}
+                                            className="px-3 py-2 text-sm font-bold text-rose-600 border border-rose-200 rounded-lg hover:bg-rose-50 disabled:opacity-50"
+                                        >
+                                            취소
+                                        </button>
+                                    </div>
                                 </li>
                             ))}
                         </ul>
@@ -739,8 +764,62 @@ export default function AdminVillaPage() {
                                         )}
                                     </div>
                                 )}
+
+                                <div className="pt-2 mt-1 border-t border-gray-100">
+                                    <button
+                                        onClick={() => askCancel(a)}
+                                        disabled={busyId === a.id}
+                                        className="w-full px-3 py-2 text-xs font-bold text-rose-600 border border-rose-200 rounded-lg hover:bg-rose-50 disabled:opacity-50"
+                                    >
+                                        예약 취소
+                                    </button>
+                                </div>
                             </div>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {/* 담당자 직접 취소 — 사유 입력 후 확정 */}
+            {cancelTarget && (
+                <div
+                    className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                    onClick={() => setCancelTarget(null)}
+                >
+                    <div
+                        className="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl space-y-3"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <h2 className="font-bold text-gray-900">예약 취소</h2>
+                        <p className="text-sm text-gray-600">
+                            <span className="font-bold">{cancelTarget.user_name}</span>님의{' '}
+                            {cancelTarget.facility_name} · {cancelTarget.start_date} ~ {cancelTarget.end_date} 예약을 취소합니다.
+                        </p>
+                        <p className="text-xs text-rose-600 bg-rose-50 rounded-lg px-2.5 py-2">
+                            취소 사유는 이용자에게 Slack·메일로 함께 전달됩니다.
+                        </p>
+                        <textarea
+                            value={cancelReason}
+                            onChange={e => setCancelReason(e.target.value)}
+                            rows={3}
+                            placeholder="취소 사유를 입력하세요 (필수)"
+                            className="w-full rounded-xl border border-gray-200 bg-gray-50 p-2.5 text-sm outline-none focus:ring-2 focus:ring-rose-500"
+                        />
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setCancelTarget(null)}
+                                className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600"
+                            >
+                                닫기
+                            </button>
+                            <button
+                                onClick={doCancel}
+                                disabled={busyId === cancelTarget.id || !cancelReason.trim()}
+                                className="flex-1 bg-rose-600 text-white font-bold py-2.5 rounded-xl hover:bg-rose-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                {busyId === cancelTarget.id ? <Loader2 size={16} className="animate-spin" /> : '취소 확정'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

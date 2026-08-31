@@ -107,6 +107,11 @@ class VillaCancelRequest(BaseModel):
     reason: Optional[str] = None
 
 
+class VillaAdminCancel(BaseModel):
+    """담당자가 이용자의 예약을 직접 취소할 때. 사유는 필수다."""
+    reason: str
+
+
 class VillaKeyIssue(BaseModel):
     key_number: str
 

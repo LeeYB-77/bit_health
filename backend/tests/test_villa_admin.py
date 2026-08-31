@@ -327,6 +327,104 @@ def test_취소처리는_관리자_전용(client, db, facilities, make_user, aut
     assert client.post(f"/api/villa/admin/{endpoint}/{row.id}", headers=auth_headers(make_user())).status_code == 400
 
 
+# --- 담당자 직접 취소 ---
+
+@pytest.mark.parametrize("status", ["applied", "confirmed", "cancel_requested"])
+def test_담당자_직접취소는_활성_예약을_취소한다(client, db, facilities, make_user, auth_headers, status):
+    villa = facilities["cheongpyeong"]
+    row = _seed(db, make_user(email="guest@bit.kr"), villa, _in_target_month(10), _in_target_month(12), status=status)
+
+    res = client.post(
+        f"/api/villa/admin/cancel/{row.id}",
+        headers=auth_headers(_admin(make_user)),
+        json={"reason": "시설 점검"},
+    )
+    assert res.status_code == 200, res.text
+    db.refresh(row)
+    assert row.status == "canceled"
+    assert row.canceled_at is not None
+    assert row.canceled_by is not None
+    assert row.cancel_reason == "시설 점검"
+
+
+def test_담당자_취소후_기간이_다시_열린다(client, db, facilities, make_user, auth_headers):
+    villa = facilities["cheongpyeong"]
+    row = _seed(db, make_user(), villa, _in_target_month(10), _in_target_month(12), status="confirmed")
+
+    res = client.post(
+        f"/api/villa/admin/cancel/{row.id}",
+        headers=auth_headers(_admin(make_user)),
+        json={"reason": "중복 예약 정리"},
+    )
+    assert res.status_code == 200
+
+    # 같은 기간에 다시 신청 가능해야 한다
+    res = client.post(
+        "/api/villa/apply",
+        headers=auth_headers(make_user()),
+        json=_payload(villa.id, _in_target_month(10), _in_target_month(12)),
+    )
+    assert res.status_code == 200, res.text
+
+
+def test_담당자_취소는_사유가_필수(client, db, facilities, make_user, auth_headers):
+    row = _seed(db, make_user(), facilities["cheongpyeong"], _in_target_month(10), _in_target_month(12), status="confirmed")
+    res = client.post(
+        f"/api/villa/admin/cancel/{row.id}",
+        headers=auth_headers(_admin(make_user)),
+        json={"reason": "   "},
+    )
+    assert res.status_code == 400
+    db.refresh(row)
+    assert row.status == "confirmed"  # 취소되지 않았다
+
+
+@pytest.mark.parametrize("status", ["canceled", "rejected"])
+def test_이미_취소된_예약은_다시_취소_불가(client, db, facilities, make_user, auth_headers, status):
+    row = _seed(db, make_user(), facilities["cheongpyeong"], _in_target_month(10), _in_target_month(12), status=status)
+    res = client.post(
+        f"/api/villa/admin/cancel/{row.id}",
+        headers=auth_headers(_admin(make_user)),
+        json={"reason": "사유"},
+    )
+    assert res.status_code == 400
+
+
+def test_없는_예약_취소는_404(client, db, facilities, make_user, auth_headers):
+    res = client.post(
+        "/api/villa/admin/cancel/999999",
+        headers=auth_headers(_admin(make_user)),
+        json={"reason": "사유"},
+    )
+    assert res.status_code == 404
+
+
+def test_담당자_취소는_관리자_전용(client, db, facilities, make_user, auth_headers):
+    row = _seed(db, make_user(), facilities["cheongpyeong"], _in_target_month(10), _in_target_month(12), status="confirmed")
+    res = client.post(
+        f"/api/villa/admin/cancel/{row.id}",
+        headers=auth_headers(make_user()),
+        json={"reason": "사유"},
+    )
+    assert res.status_code == 400
+    db.refresh(row)
+    assert row.status == "confirmed"
+
+
+def test_별장_위임_담당자도_직접취소_가능(client, db, facilities, make_user, auth_headers):
+    manager = make_user(role="user", is_villa_admin=True)
+    row = _seed(db, make_user(email="guest@bit.kr"), facilities["cheongpyeong"], _in_target_month(10), _in_target_month(12), status="confirmed")
+    res = client.post(
+        f"/api/villa/admin/cancel/{row.id}",
+        headers=auth_headers(manager),
+        json={"reason": "담당자 처리"},
+    )
+    assert res.status_code == 200
+    db.refresh(row)
+    assert row.status == "canceled"
+    assert row.canceled_by == manager.id
+
+
 # --- 회차 관리 ---
 
 def test_회차_목록과_대기건수(client, db, facilities, make_user, auth_headers):
