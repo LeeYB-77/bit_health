@@ -82,7 +82,7 @@ def test_다른_별장은_그룹이_분리됨(client, db, facilities, make_user,
 
     body = client.get("/api/villa/admin/applications", headers=auth_headers(_admin(make_user))).json()
     assert len(body["groups"]) == 2
-    assert {g["facility_name"] for g in body["groups"]} == {"청평별장", "동비재"}
+    assert {g["facility_name"] for g in body["groups"]} == {"청평별장", "속초별장"}
 
 
 def test_통보대기건수는_해당_회차만_센다(client, db, facilities, make_user, auth_headers):

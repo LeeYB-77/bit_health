@@ -295,7 +295,7 @@ export interface VillaExtraInfo {
   submitted: boolean;
   composition_total: number;
   warning?: string | null;
-  // 동비재 + 차량번호 입력 + 관리실 주소 설정이 모두 갖춰졌을 때만 채워진다.
+  // 속초별장 + 차량번호 입력 + 관리실 주소 설정이 모두 갖춰졌을 때만 채워진다.
   parking_mail?: VillaParkingMail | null;
 }
 

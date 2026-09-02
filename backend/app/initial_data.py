@@ -34,7 +34,7 @@ def init_db():
             {"name": "Gym", "type": "gym", "capacity": 15},
             {"name": "ScreenGolf", "type": "golf", "capacity": 1},
             {"name": "청평별장", "type": "villa", "capacity": 20},
-            {"name": "동비재", "type": "villa", "capacity": 20},
+            {"name": "속초별장", "type": "villa", "capacity": 20},
         ]
 
         for f in facilities:

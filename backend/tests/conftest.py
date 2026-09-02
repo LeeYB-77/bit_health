@@ -64,7 +64,7 @@ def facilities(db):
     gym = models.Facility(name="Gym", type="gym", capacity=15)
     golf = models.Facility(name="ScreenGolf", type="golf", capacity=1)
     cheongpyeong = models.Facility(name="청평별장", type="villa", capacity=20)
-    dongbijae = models.Facility(name="동비재", type="villa", capacity=20)
+    dongbijae = models.Facility(name="속초별장", type="villa", capacity=20)
     db.add_all([gym, golf, cheongpyeong, dongbijae])
     db.commit()
     for f in (gym, golf, cheongpyeong, dongbijae):

@@ -1,4 +1,4 @@
-# 비트별장(청평별장/동비재) 예약 신청·조회 API
+# 비트별장(청평별장/속초별장) 예약 신청·조회 API
 import calendar
 import copy
 import json
@@ -37,7 +37,7 @@ DEFAULT_VILLA_SETTINGS = {
     "default_checkout_time": "12:00",
     "villas": {
         "청평별장": {"address": "경기도 가평군 설악면 유명로 2304-34 르메이에르청평빌라 103동 402호(F층 시드니Ⅱ)", "size": "56평", "notice": ""},
-        "동비재": {"address": "강원도 속초시 금호동 630 생모리츠아파트 102동 1201호(속초 청초호 앞에 위치)", "size": "51평", "notice": ""},
+        "속초별장": {"address": "강원도 속초시 금호동 630 생모리츠아파트 102동 1201호(속초 청초호 앞에 위치)", "size": "51평", "notice": ""},
     },
 }
 
@@ -694,7 +694,7 @@ def update_extra_info(
 
 def _parking_mail_draft_for(db: Session, reservation) -> dict | None:
     """
-    주차등록 요청 메일 초안. 동비재만 대상이고, 차량이 없거나 관리실 주소가
+    주차등록 요청 메일 초안. 속초별장만 대상이고, 차량이 없거나 관리실 주소가
     설정되지 않았으면 보낼 것이 없으므로 None을 준다.
     """
     if not reservation.facility or reservation.facility.name != villa_notify.PARKING_MAIL_VILLA:
@@ -1214,7 +1214,7 @@ ADMIN_CANCELABLE_STATUSES = ("applied", "confirmed", "cancel_requested")
 
 def _notify_office_of_villa_cancellation(db: Session, reservation, reason: str):
     """
-    동비재 확정 예약이 취소되면 관리실에 주차·입실 취소 메일을 보낸다.
+    속초별장 확정 예약이 취소되면 관리실에 주차·입실 취소 메일을 보낸다.
     관리실이 인지한 예약(확정 이상)만 대상이므로 신청(applied) 취소는 호출하지 않는다.
     관리실 주소가 없으면 조용히 건너뛴다. (성공, 실패, 대상아님) 여부를 문자열로 돌려준다.
     """

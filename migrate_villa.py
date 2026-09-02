@@ -1,7 +1,7 @@
 """
 마이그레이션: 비트별장(휴양소) 예약 기능
 - villa_booking_rounds, villa_reservations 테이블 생성
-- 청평별장/동비재 시설 시드 (정원 20명)
+- 청평별장/속초별장 시설 시드 (정원 20명)
 - villa_settings 기본 설정 시드 (7·8월 2박 제한)
 
 테이블 자체는 배포 시 main.py의 Base.metadata.create_all()이 만들지만,
@@ -108,6 +108,22 @@ SQL_COMMANDS = [
     "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS key_issued_at TIMESTAMP;",
     "ALTER TABLE villa_reservations ADD COLUMN IF NOT EXISTS key_returned_at TIMESTAMP;",
 
+    # 2-1. 동비재 → 속초별장 개명 (기존 운영 반영). 시드보다 먼저 실행해야
+    # 이름이 바뀐 아래 시드가 중복 시설을 만들지 않는다. 예약은 facility_id로
+    # 연결되므로 이름만 바꿔도 기존 예약에 영향이 없다. 멱등하다(재실행 시 no-op).
+    "UPDATE facilities SET name = '속초별장' WHERE name = '동비재';",
+    # villa_settings의 villas 키도 동비재 → 속초별장으로 옮긴다(주소/평수/notice 보존).
+    """
+    UPDATE system_settings
+    SET value = jsonb_set(
+        (value::jsonb) #- '{villas,동비재}',
+        '{villas,속초별장}',
+        (value::jsonb) #> '{villas,동비재}'
+    )::text
+    WHERE key = 'villa_settings'
+      AND (value::jsonb) #> '{villas,동비재}' IS NOT NULL;
+    """,
+
     # 3. 별장 시설 시드 (정원 20명)
     """
     INSERT INTO facilities (name, type, capacity)
@@ -116,8 +132,8 @@ SQL_COMMANDS = [
     """,
     """
     INSERT INTO facilities (name, type, capacity)
-    SELECT '동비재', 'villa', 20
-    WHERE NOT EXISTS (SELECT 1 FROM facilities WHERE name = '동비재');
+    SELECT '속초별장', 'villa', 20
+    WHERE NOT EXISTS (SELECT 1 FROM facilities WHERE name = '속초별장');
     """,
 
     # 4. villa_settings 기본값 시드 (정규 입퇴실 시간: 입실 14:00 / 퇴실 12:00)
@@ -154,8 +170,8 @@ SQL_COMMANDS = [
     UPDATE system_settings
     SET value = (
         jsonb_set(
-            jsonb_set(value::jsonb, '{villas,동비재,address}', '"강원도 속초시 금호동 630 생모리츠아파트 102동 1201호(속초 청초호 앞에 위치)"'),
-            '{villas,동비재,size}', '"51평"'
+            jsonb_set(value::jsonb, '{villas,속초별장,address}', '"강원도 속초시 금호동 630 생모리츠아파트 102동 1201호(속초 청초호 앞에 위치)"'),
+            '{villas,속초별장,size}', '"51평"'
         )
     )::text
     WHERE key = 'villa_settings';

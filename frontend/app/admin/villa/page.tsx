@@ -622,13 +622,13 @@ export default function AdminVillaPage() {
                 ))}
             </section>
 
-            {/* 관리실 메일 — 동비재 주차등록 요청 메일을 받을 주소 */}
+            {/* 관리실 메일 — 속초별장 주차등록 요청 메일을 받을 주소 */}
             <section className="rounded-2xl bg-white shadow-sm border border-gray-100 p-5 space-y-3">
                 <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
                     <Mail size={16} className="text-blue-600" /> 관리실 메일 주소
                 </h3>
                 <p className="text-xs text-gray-500">
-                    동비재 이용자가 이용 정보를 저장하면 이 주소로 주차등록 요청 메일을 보낼 수 있습니다.
+                    속초별장 이용자가 이용 정보를 저장하면 이 주소로 주차등록 요청 메일을 보낼 수 있습니다.
                     비워 두면 주차등록 메일 안내가 표시되지 않습니다.
                 </p>
                 <div className="flex gap-2">
@@ -797,7 +797,7 @@ export default function AdminVillaPage() {
                         </p>
                         <p className="text-xs text-rose-600 bg-rose-50 rounded-lg px-2.5 py-2">
                             취소 사유는 이용자에게 Slack·메일로 함께 전달됩니다.
-                            {cancelTarget.facility_name === '동비재' && ' 동비재는 관리실에도 주차·입실 취소 메일이 발송됩니다.'}
+                            {cancelTarget.facility_name === '속초별장' && ' 속초별장는 관리실에도 주차·입실 취소 메일이 발송됩니다.'}
                         </p>
                         <textarea
                             value={cancelReason}

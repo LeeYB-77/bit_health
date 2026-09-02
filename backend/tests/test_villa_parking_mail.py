@@ -1,4 +1,4 @@
-# 동비재 주차등록 요청 메일(관리실 주소 설정 → 초안 확인·수정 → 발송)을 고정하는 테스트
+# 속초별장 주차등록 요청 메일(관리실 주소 설정 → 초안 확인·수정 → 발송)을 고정하는 테스트
 import pytest
 
 from app import villa_notify
@@ -110,7 +110,7 @@ def test_설정_변경은_관리자_전용(client, db, make_user, auth_headers):
 
 # --- 저장 응답의 메일 초안 ---
 
-def test_동비재_저장시_메일_초안_반환(client, db, facilities, make_user, auth_headers):
+def test_속초별장_저장시_메일_초안_반환(client, db, facilities, make_user, auth_headers):
     manager = _villa_manager(make_user)
     _set_office_email(client, auth_headers, manager)
 
@@ -308,7 +308,7 @@ def _office_mails(sent):
     return [m for m in sent if m["to"] == OFFICE]
 
 
-def test_동비재_담당자취소시_관리실_취소메일(client, db, facilities, make_user, auth_headers, sent):
+def test_속초별장_담당자취소시_관리실_취소메일(client, db, facilities, make_user, auth_headers, sent):
     manager = _villa_manager(make_user)
     _set_office_email(client, auth_headers, manager)
     guest = make_user(name="김취소", email="guest@bit.kr")
@@ -331,7 +331,7 @@ def test_동비재_담당자취소시_관리실_취소메일(client, db, facilit
     assert "김취소" in office[0]["body"]
 
 
-def test_동비재_신청단계_취소는_관리실_메일_없음(client, db, facilities, make_user, auth_headers, sent):
+def test_속초별장_신청단계_취소는_관리실_메일_없음(client, db, facilities, make_user, auth_headers, sent):
     """applied 상태는 관리실이 인지하지 못한 예약이라 취소 메일을 보내지 않는다."""
     manager = _villa_manager(make_user)
     _set_office_email(client, auth_headers, manager)
@@ -385,7 +385,7 @@ def test_관리실주소_없으면_취소메일_없음(client, db, facilities, m
     assert _office_mails(sent) == []
 
 
-def test_동비재_취소승인시에도_관리실_취소메일(client, db, facilities, make_user, auth_headers, sent):
+def test_속초별장_취소승인시에도_관리실_취소메일(client, db, facilities, make_user, auth_headers, sent):
     """이용자 취소 요청 → 담당자 승인 경로에서도 관리실에 취소 메일이 나간다."""
     manager = _villa_manager(make_user)
     _set_office_email(client, auth_headers, manager)

@@ -50,7 +50,7 @@ def test_이용안내_본인만_조회(client, db, facilities, make_user, auth_h
     assert res2.status_code == 403
 
 
-def test_이용안내_동비재는_12층현관문에_아이콘_포함(client, db, facilities, make_user, auth_headers):
+def test_이용안내_속초별장는_12층현관문에_아이콘_포함(client, db, facilities, make_user, auth_headers):
     owner = make_user(email="owner@bit.kr")
     villa = facilities["dongbijae"]
     r = _seed(db, owner, villa, _in_target_month(10), _in_target_month(12), status="confirmed")

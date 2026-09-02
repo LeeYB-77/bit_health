@@ -27,7 +27,7 @@ export default function VillaExtraInfoPage() {
     const [error, setError] = useState<string | null>(null);
     const [saved, setSaved] = useState<{ warning: string | null; mailSent?: string } | null>(null);
 
-    // 주차등록 요청 메일 — 저장 직후 내용을 확인·수정한 뒤 발송한다(동비재만).
+    // 주차등록 요청 메일 — 저장 직후 내용을 확인·수정한 뒤 발송한다(속초별장만).
     const [parkingMail, setParkingMail] = useState<VillaParkingMail | null>(null);
     const [sending, setSending] = useState(false);
 

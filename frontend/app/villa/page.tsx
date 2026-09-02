@@ -1,5 +1,5 @@
 'use client';
-// 비트별장(청평별장/동비재) 예약 신청 화면. 달력으로 확정/신청중 예약을 구분해 보여준다.
+// 비트별장(청평별장/속초별장) 예약 신청 화면. 달력으로 확정/신청중 예약을 구분해 보여준다.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -82,7 +82,7 @@ const VILLA_INFO: Record<string, { slug: string; images: { file: string; label: 
             { file: 'floorplan.jpg', label: '평면도' },
         ],
     },
-    동비재: {
+    속초별장: {
         slug: 'dongbijae',
         images: [
             { file: 'exterior.png', label: '아파트 전경' },

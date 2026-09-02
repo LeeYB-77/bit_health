@@ -86,7 +86,7 @@ class VillaBookingRound(Base):
 
 class VillaReservation(Base):
     """
-    비트별장(청평별장/동비재) 예약 신청.
+    비트별장(청평별장/속초별장) 예약 신청.
     골프와 생애주기가 달라 Reservation을 재사용하지 않는다.
     신청 → (중복 경합) → 관리자 확정 → 추가입력 순으로 진행된다.
     end_date(체크아웃)는 배타적이므로 8/1~8/3과 8/3~8/5는 겹치지 않는다.

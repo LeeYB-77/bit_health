@@ -107,7 +107,7 @@ def test_별장_목록_조회(client, facilities, make_user, auth_headers):
     res = client.get("/api/villa/facilities", headers=auth_headers(make_user()))
     assert res.status_code == 200
     body = res.json()
-    assert [v["name"] for v in body] == ["청평별장", "동비재"]
+    assert [v["name"] for v in body] == ["청평별장", "속초별장"]
     assert all(v["capacity"] == 20 for v in body)
     assert body[0]["default_checkin_time"] == "14:00"
     assert body[0]["default_checkout_time"] == "12:00"

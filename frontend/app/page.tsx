@@ -168,7 +168,7 @@ export default function Home() {
             </div>
             <div>
               <p className="font-bold text-gray-800">비트별장</p>
-              <p className="text-gray-400 text-sm mt-0.5">청평별장.동비재 예약</p>
+              <p className="text-gray-400 text-sm mt-0.5">청평별장.속초별장 예약</p>
             </div>
           </button>
         </div>

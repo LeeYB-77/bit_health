@@ -35,8 +35,8 @@ def _admin_link_lines() -> tuple:
     return f"\n👉 <{url}|[관리자 페이지]>", f"\n[관리자 페이지] {url}\n"
 
 
-# 동비재 주차등록 요청 메일. 청평별장은 관리실 등록 절차가 없어 동비재만 대상이다.
-PARKING_MAIL_VILLA = "동비재"
+# 속초별장 주차등록 요청 메일. 청평별장은 관리실 등록 절차가 없어 속초별장만 대상이다.
+PARKING_MAIL_VILLA = "속초별장"
 PARKING_MAIL_SUBJECT = "102동1201호 주차등록 부탁드립니다."
 PARKING_CANCEL_SUBJECT = "102동1201호 주차등록·입실 취소 부탁드립니다."
 
@@ -303,7 +303,7 @@ def parking_cancel_mail_body(reservation, reason: str) -> str:
 
 def send_parking_cancel_mail(db: Session, to_email: str, reservation, reason: str) -> bool:
     """
-    동비재 예약이 취소될 때 관리실에 주차·입실 취소를 알린다. 취소 자체는 이미
+    속초별장 예약이 취소될 때 관리실에 주차·입실 취소를 알린다. 취소 자체는 이미
     끝난 뒤의 부가 통보이므로, 발송 실패가 취소를 되돌리지 않도록 예외를 삼킨다.
     """
     return email_utils.send_mail(db, to_email, PARKING_CANCEL_SUBJECT, parking_cancel_mail_body(reservation, reason))
