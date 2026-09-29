@@ -680,7 +680,7 @@ def update_extra_info(
     if total != reservation.participant_count:
         warning = (
             f"입력하신 인원 {total}명이 신청 인원 {reservation.participant_count}명과 다릅니다. "
-            f"변경이 필요하면 관리팀에 알려 주세요."
+            f"변경이 필요하면 비서실에 알려 주세요."
         )
 
     return {
