@@ -355,12 +355,12 @@ def notify_canceled_by_admin(db: Session, reservation, reason: str) -> bool:
         f"🏡 *[비트별장 예약 취소 안내]*\n\n"
         f"*{villa}* {period} 예약이 관리자에 의해 취소되었습니다.\n"
         f"• *사유*: {reason}\n\n"
-        f"문의가 있으시면 관리팀으로 연락해 주세요."
+        f"문의가 있으시면 비서실로 연락해 주세요."
     )
     mail_body = (
         f"{villa} {period} 예약이 관리자에 의해 취소되었습니다.\n\n"
         f"- 사유: {reason}\n\n"
-        f"문의가 있으시면 관리팀으로 연락해 주세요.\n"
+        f"문의가 있으시면 비서실로 연락해 주세요.\n"
     )
     return _dispatch(db, reservation.user, f"[BIT] {villa} 예약이 취소되었습니다", slack_message, mail_body)
 
@@ -490,10 +490,10 @@ def notify_cancel_rejected(db: Session, reservation) -> bool:
     slack_message = (
         f"🏡 *[비트별장 취소 요청 반려]*\n\n"
         f"*{villa}* {period} 예약의 취소 요청이 반려되었습니다.\n"
-        f"예약은 그대로 유지됩니다. 문의는 관리팀으로 연락해 주세요."
+        f"예약은 그대로 유지됩니다. 문의는 비서실로 연락해 주세요."
     )
     mail_body = (
         f"{villa} {period} 예약의 취소 요청이 반려되었습니다.\n"
-        f"예약은 그대로 유지됩니다. 문의는 관리팀으로 연락해 주세요.\n"
+        f"예약은 그대로 유지됩니다. 문의는 비서실로 연락해 주세요.\n"
     )
     return _dispatch(db, reservation.user, f"[BIT] {villa} 예약 취소 요청이 반려되었습니다", slack_message, mail_body)
