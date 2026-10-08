@@ -120,3 +120,15 @@
 1. **서버 계정 비밀번호 회전** (Phase 2) — 히스토리에 평문 잔존
 2. **원격 배포 실행 여부 확인** (Phase 7) — `python deploy.py` 실행 승인
 3. **레거시 SECRET_KEY 폴백 제거 일정** (Phase 3) — 2~4주 후 후속 커밋으로 예정
+
+---
+
+## 별장 예약 이력·통계 페이지 (2026-10)
+
+- [x] 백엔드: `GET /api/villa/admin/history` — 기간·별장·상태 필터, 요약·집계·목록 반환
+- [x] 백엔드: `GET /api/villa/admin/history/export` — 같은 필터로 xlsx 생성 (openpyxl)
+- [x] 백엔드 테스트: 집계·필터·권한, export 파일 생성
+- [x] 프런트: `/admin/villa/history` 페이지 (요약카드·차트·필터·테이블·내보내기)
+- [x] 프런트: 관리자 홈에 카드 추가
+- [x] tsc + 로컬 브라우저 검증
+- [x] 전체 테스트 통과 후 커밋 (배포는 별도 요청 시)

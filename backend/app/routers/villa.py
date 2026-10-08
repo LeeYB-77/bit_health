@@ -1,10 +1,13 @@
 # 비트별장(청평별장/속초별장) 예약 신청·조회 API
 import calendar
 import copy
+import io
 import json
+from collections import OrderedDict, defaultdict
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+import openpyxl
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -1319,6 +1322,195 @@ def update_villa_admin_settings(
     save_villa_settings_data(db, settings)
 
     return {"message": "관리실 메일 주소를 저장했습니다.", "parking_office_email": email}
+
+
+# --- 예약 이력·통계 ---
+# 과거 이용 내역 조회와 운영 통계. 체크인(start_date) 월 기준으로 집계한다.
+# "이용(확정)"은 BLOCKING_STATUSES(confirmed+cancel_requested)로 본다 —
+# cancel_requested는 승인 전까지 여전히 점유 중인 확정 예약이다.
+
+STATUS_GROUP_LABELS = {
+    "confirmed": "확정",
+    "cancel_requested": "확정",
+    "canceled": "취소",
+    "rejected": "미선정",
+    "applied": "신청중",
+}
+BOOKING_TYPE_LABELS = {"regular": "정규예약", "open": "선착순"}
+
+
+def _parse_month(value, fallback_year: int, fallback_month: int):
+    """'YYYY-MM' → (year, month). 형식이 틀리면 폴백 값을 쓴다."""
+    try:
+        y, m = value.split("-")
+        y, m = int(y), int(m)
+        if 1 <= m <= 12:
+            return y, m
+    except (ValueError, AttributeError):
+        pass
+    return fallback_year, fallback_month
+
+
+def _history_rows(db: Session, from_month, to_month, facility_id, status):
+    """기간(체크인 월)·별장·상태 필터로 예약을 start_date 내림차순으로 반환."""
+    fy, fm = from_month
+    ty, tm = to_month
+    period_start = date(fy, fm, 1)
+    period_end = date(ty, tm, calendar.monthrange(ty, tm)[1])
+
+    q = db.query(models.VillaReservation).filter(
+        models.VillaReservation.start_date >= period_start,
+        models.VillaReservation.start_date <= period_end,
+    )
+    if facility_id:
+        q = q.filter(models.VillaReservation.facility_id == facility_id)
+    if status:
+        q = q.filter(models.VillaReservation.status == status)
+    return q.order_by(models.VillaReservation.start_date.desc()).all()
+
+
+def _serialize_history_row(r) -> dict:
+    return {
+        "id": r.id,
+        "facility_name": r.facility.name if r.facility else None,
+        "user_name": r.user.name if r.user else "(알 수 없음)",
+        "user_dept": r.user.department if r.user else None,
+        "start_date": r.start_date,
+        "end_date": r.end_date,
+        "nights": nights_of(r.start_date, r.end_date),
+        "status": r.status,
+        "status_label": STATUS_GROUP_LABELS.get(r.status, r.status),
+        "booking_type": r.booking_type,
+        "booking_type_label": BOOKING_TYPE_LABELS.get(r.booking_type, r.booking_type),
+        "participant_count": r.participant_count,
+        "adult_count": r.adult_count,
+        "child_count": r.child_count,
+        "cancel_reason": r.cancel_reason,
+        "created_at": r.created_at,
+    }
+
+
+@router.get("/admin/history")
+def get_villa_history(
+    from_month: str | None = None,
+    to_month: str | None = None,
+    facility_id: int | None = None,
+    status: str | None = None,
+    current_user: models.User = Depends(auth.get_current_villa_manager),
+    db: Session = Depends(get_db),
+):
+    """기간·별장·상태 필터로 예약 이력과 운영 통계를 돌려준다. 기본 기간은 올해."""
+    today = datetime.now().date()
+    fm = _parse_month(from_month, today.year, 1)
+    tm = _parse_month(to_month, today.year, 12)
+    rows = _history_rows(db, fm, tm, facility_id, status)
+
+    used = [r for r in rows if r.status in BLOCKING_STATUSES]
+    canceled_count = sum(1 for r in rows if r.status == "canceled")
+
+    confirmed_count = len(used)
+    total_nights = sum(nights_of(r.start_date, r.end_date) for r in used)
+    denom = confirmed_count + canceled_count
+    cancel_rate = round(canceled_count / denom * 100, 1) if denom else 0.0
+    avg_participants = (
+        round(sum(r.participant_count for r in used) / confirmed_count, 1) if confirmed_count else 0.0
+    )
+
+    # 월별 추이 — 선택 기간의 모든 달을 0으로 미리 채워 빈 달도 그래프에 나온다.
+    monthly = OrderedDict()
+    y, m = fm
+    while (y, m) <= tm:
+        monthly[f"{y:04d}-{m:02d}"] = {"month": f"{y:04d}-{m:02d}", "count": 0, "nights": 0}
+        y, m = shift_month(y, m, 1)
+    for r in used:
+        key = f"{r.start_date.year:04d}-{r.start_date.month:02d}"
+        if key in monthly:
+            monthly[key]["count"] += 1
+            monthly[key]["nights"] += nights_of(r.start_date, r.end_date)
+
+    fac_map = defaultdict(lambda: {"count": 0, "nights": 0})
+    for r in used:
+        name = r.facility.name if r.facility else "(알 수 없음)"
+        fac_map[name]["count"] += 1
+        fac_map[name]["nights"] += nights_of(r.start_date, r.end_date)
+    by_facility = [{"facility": k, **v} for k, v in fac_map.items()]
+
+    status_map = defaultdict(int)
+    for r in rows:
+        status_map[STATUS_GROUP_LABELS.get(r.status, r.status)] += 1
+    by_status = [{"label": k, "count": v} for k, v in status_map.items()]
+
+    bt_map = defaultdict(int)
+    for r in used:
+        bt_map[r.booking_type or "regular"] += 1
+    by_booking_type = [
+        {"type": k, "label": BOOKING_TYPE_LABELS.get(k, k), "count": v} for k, v in bt_map.items()
+    ]
+
+    return {
+        "from_month": f"{fm[0]:04d}-{fm[1]:02d}",
+        "to_month": f"{tm[0]:04d}-{tm[1]:02d}",
+        "summary": {
+            "confirmed_count": confirmed_count,
+            "total_nights": total_nights,
+            "cancel_rate": cancel_rate,
+            "avg_participants": avg_participants,
+        },
+        "monthly": list(monthly.values()),
+        "by_facility": by_facility,
+        "by_status": by_status,
+        "by_booking_type": by_booking_type,
+        "reservations": [_serialize_history_row(r) for r in rows],
+    }
+
+
+@router.get("/admin/history/export")
+def export_villa_history(
+    from_month: str | None = None,
+    to_month: str | None = None,
+    facility_id: int | None = None,
+    status: str | None = None,
+    current_user: models.User = Depends(auth.get_current_villa_manager),
+    db: Session = Depends(get_db),
+):
+    """조회한 이력과 동일한 필터로 xlsx 파일을 만들어 내려준다."""
+    today = datetime.now().date()
+    fm = _parse_month(from_month, today.year, 1)
+    tm = _parse_month(to_month, today.year, 12)
+    rows = _history_rows(db, fm, tm, facility_id, status)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "별장 예약 이력"
+    ws.append([
+        "이용자", "부서", "별장", "체크인", "체크아웃", "박", "상태",
+        "신청유형", "인원", "성인", "아동", "취소사유", "신청일시",
+    ])
+    for r in rows:
+        ws.append([
+            r.user.name if r.user else "",
+            (r.user.department if r.user else "") or "",
+            r.facility.name if r.facility else "",
+            str(r.start_date),
+            str(r.end_date),
+            nights_of(r.start_date, r.end_date),
+            STATUS_GROUP_LABELS.get(r.status, r.status),
+            BOOKING_TYPE_LABELS.get(r.booking_type, r.booking_type or ""),
+            r.participant_count,
+            r.adult_count if r.adult_count is not None else "",
+            r.child_count if r.child_count is not None else "",
+            r.cancel_reason or "",
+            r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else "",
+        ])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    filename = f"villa_history_{fm[0]:04d}{fm[1]:02d}_{tm[0]:04d}{tm[1]:02d}.xlsx"
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/admin/key/{reservation_id}")

@@ -176,6 +176,12 @@ export default function AdminDashboard() {
                                 비트별장 예약 관리 <ArrowRight size={14} />
                             </button>
                             <button
+                                onClick={() => router.push('/admin/villa/history')}
+                                className="w-full py-2 bg-amber-50 text-amber-700 rounded-lg text-sm font-semibold hover:bg-amber-100 transition-colors flex items-center justify-center gap-2"
+                            >
+                                비트별장 이력·통계 <ArrowRight size={14} />
+                            </button>
+                            <button
                                 onClick={() => router.push('/admin/smtp')}
                                 className="w-full py-2 bg-slate-50 text-slate-600 rounded-lg text-sm font-semibold hover:bg-slate-100 transition-colors flex items-center justify-center gap-2"
                             >
