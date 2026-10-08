@@ -25,7 +25,9 @@ export default function AdminLayout({
 
         // 별장만 위임 관리하는 담당자는 golf/users/smtp 등 다른 관리 영역의
         // API를 호출할 권한이 없다. 대시보드 대신 비트별장 관리 화면으로 보낸다.
-        if (role !== 'admin' && isVillaAdmin && pathname !== '/admin/villa') {
+        // 단, 비트별장 하위 페이지(예약 관리·이력/통계)는 담당자도 접근할 수 있다.
+        const isVillaArea = pathname === '/admin/villa' || pathname.startsWith('/admin/villa/');
+        if (role !== 'admin' && isVillaAdmin && !isVillaArea) {
             router.replace('/admin/villa');
             return;
         }

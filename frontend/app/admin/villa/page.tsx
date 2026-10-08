@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { API_URL, getVillas, Villa } from '@/lib/api';
-import { AlertTriangle, ArrowLeft, Calendar, Check, Key, Loader2, Mail, Send, Users, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, BarChart3, Calendar, Check, Key, Loader2, Mail, Send, Users, X } from 'lucide-react';
 
 interface Application {
     id: number;
@@ -366,6 +366,12 @@ export default function AdminVillaPage() {
                     <ArrowLeft size={20} />
                 </button>
                 <h2 className="text-xl font-bold text-gray-900">비트별장 예약 관리</h2>
+                <button
+                    onClick={() => router.push('/admin/villa/history')}
+                    className="ml-auto px-3 py-1.5 text-sm font-bold text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50 flex items-center gap-1.5"
+                >
+                    <BarChart3 size={15} /> 이력·통계
+                </button>
             </div>
 
             {message && (
