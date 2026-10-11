@@ -3,7 +3,7 @@
 // 제출 결과(체크 완료 항목·특이사항)는 슬랙으로 빌라 관리자에게 전달된다.
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Loader2, X } from 'lucide-react';
 import { getVillaCheckout, submitVillaCheckout, VillaCheckout } from '@/lib/api';
 
@@ -11,6 +11,7 @@ export default function VillaCheckoutPage() {
     const router = useRouter();
     const params = useParams<{ id: string }>();
     const reservationId = Number(params?.id);
+    const linkToken = useSearchParams().get('t');  // 슬랙·메일 매직 링크 토큰
 
     const [data, setData] = useState<VillaCheckout | null>(null);
     const [checked, setChecked] = useState<boolean[]>([]);
@@ -23,7 +24,7 @@ export default function VillaCheckoutPage() {
 
     const load = useCallback(async () => {
         try {
-            const result = await getVillaCheckout(reservationId);
+            const result = await getVillaCheckout(reservationId, linkToken);
             setData(result);
             setChecked(result.checked ?? result.checklist.map(() => false));
             setNotes(result.notes ?? '');
@@ -33,10 +34,11 @@ export default function VillaCheckoutPage() {
         } finally {
             setLoading(false);
         }
-    }, [reservationId]);
+    }, [reservationId, linkToken]);
 
     useEffect(() => {
-        if (!localStorage.getItem('access_token')) {
+        // 매직 링크 토큰이 있으면 로그인 없이 접근한다.
+        if (!linkToken && !localStorage.getItem('access_token')) {
             router.replace(`/login?redirect=/villa/checkout/${reservationId}`);
             return;
         }
@@ -46,7 +48,7 @@ export default function VillaCheckoutPage() {
             return;
         }
         load();
-    }, [load, reservationId, router]);
+    }, [load, reservationId, router, linkToken]);
 
     const toggle = (idx: number) => {
         setChecked(prev => prev.map((v, i) => (i === idx ? !v : v)));
@@ -58,7 +60,7 @@ export default function VillaCheckoutPage() {
         setSubmitting(true);
         setError(null);
         try {
-            await submitVillaCheckout(reservationId, { checked, notes: notes.trim() || null });
+            await submitVillaCheckout(reservationId, { checked, notes: notes.trim() || null }, linkToken);
             setDone(true);
         } catch (e) {
             setError(e instanceof Error ? e.message : '제출에 실패했습니다.');

@@ -2,7 +2,7 @@
 // 비트별장 이용안내 페이지. 입실 전날 메일·Slack 링크로 진입한다.
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { ArrowLeft, Key, MapPin, Phone, Wifi, X } from 'lucide-react';
 import { getVillaGuide, VillaAccessStep, VillaGuide } from '@/lib/api';
@@ -32,6 +32,7 @@ export default function VillaGuidePage() {
     const router = useRouter();
     const params = useParams<{ id: string }>();
     const reservationId = Number(params?.id);
+    const linkToken = useSearchParams().get('t');  // 슬랙·메일 매직 링크 토큰
 
     const [guide, setGuide] = useState<VillaGuide | null>(null);
     const [loading, setLoading] = useState(true);
@@ -39,16 +40,17 @@ export default function VillaGuidePage() {
 
     const load = useCallback(async () => {
         try {
-            setGuide(await getVillaGuide(reservationId));
+            setGuide(await getVillaGuide(reservationId, linkToken));
         } catch (e) {
             setError(e instanceof Error ? e.message : '이용안내를 불러오지 못했습니다.');
         } finally {
             setLoading(false);
         }
-    }, [reservationId]);
+    }, [reservationId, linkToken]);
 
     useEffect(() => {
-        if (!localStorage.getItem('access_token')) {
+        // 매직 링크 토큰이 있으면 로그인 없이 접근한다.
+        if (!linkToken && !localStorage.getItem('access_token')) {
             router.replace(`/login?redirect=/villa/guide/${reservationId}`);
             return;
         }
@@ -58,7 +60,7 @@ export default function VillaGuidePage() {
             return;
         }
         load();
-    }, [load, reservationId, router]);
+    }, [load, reservationId, router, linkToken]);
 
     if (loading) return (
         <div className="h-screen flex items-center justify-center bg-gray-50">

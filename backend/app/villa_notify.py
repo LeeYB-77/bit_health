@@ -4,7 +4,7 @@ import os
 
 from sqlalchemy.orm import Session
 
-from . import email_utils, slack_utils
+from . import auth, email_utils, slack_utils
 
 logger = logging.getLogger(__name__)
 
@@ -13,16 +13,22 @@ logger = logging.getLogger(__name__)
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://book.bit.kr")
 
 
+def _link(path: str, reservation_id: int) -> str:
+    # 예약 전용 서명 토큰(?t=)을 붙여 모바일에서 SSO 로그인 없이 바로 열 수 있게 한다.
+    token = auth.create_villa_link_token(reservation_id)
+    return f"{PUBLIC_BASE_URL.rstrip('/')}{path}/{reservation_id}?t={token}"
+
+
 def extra_info_url(reservation_id: int) -> str:
-    return f"{PUBLIC_BASE_URL.rstrip('/')}/villa/extra/{reservation_id}"
+    return _link("/villa/extra", reservation_id)
 
 
 def guide_url(reservation_id: int) -> str:
-    return f"{PUBLIC_BASE_URL.rstrip('/')}/villa/guide/{reservation_id}"
+    return _link("/villa/guide", reservation_id)
 
 
 def checkout_url(reservation_id: int) -> str:
-    return f"{PUBLIC_BASE_URL.rstrip('/')}/villa/checkout/{reservation_id}"
+    return _link("/villa/checkout", reservation_id)
 
 
 def admin_villa_url() -> str:

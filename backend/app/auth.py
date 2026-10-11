@@ -19,6 +19,12 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 365  # 1 year
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
+# 링크 토큰만으로 접근하는 경로(별장 슬랙·메일 링크)에서는 Authorization 헤더가
+# 없어도 401을 내지 않아야 한다. auto_error=False로 두고 호출부에서 판단한다.
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="api/auth/login", auto_error=False)
+
+# 별장 슬랙·메일 링크에 담는 1회용 서명 토큰의 용도 식별자.
+VILLA_LINK_PURPOSE = "villa_link"
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -38,6 +44,28 @@ def _decode_token(token: str):
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         return None
+
+
+def create_villa_link_token(reservation_id: int, expire_days: int = 120) -> str:
+    """
+    별장 슬랙·메일 링크에 담는 예약 전용 토큰. 해당 예약의 조회·제출에만 쓸 수 있고
+    사용자 로그인(SSO 메일 인증)을 대신한다. 링크는 본인에게만 발송된다.
+    """
+    expire = datetime.utcnow() + timedelta(days=expire_days)
+    return jwt.encode(
+        {"purpose": VILLA_LINK_PURPOSE, "rid": reservation_id, "exp": expire},
+        SECRET_KEY,
+        algorithm=ALGORITHM,
+    )
+
+
+def verify_villa_link_token(token: str) -> Optional[int]:
+    """유효한 별장 링크 토큰이면 예약 ID를 돌려준다. 아니면(서명·만료·용도 불일치) None."""
+    payload = _decode_token(token)
+    if not payload or payload.get("purpose") != VILLA_LINK_PURPOSE:
+        return None
+    rid = payload.get("rid")
+    return rid if isinstance(rid, int) else None
 
 def get_db():
     db = database.SessionLocal()
@@ -67,6 +95,22 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 async def get_current_active_user(current_user: models.User = Depends(get_current_user)):
     return current_user
+
+
+async def get_optional_user(
+    token: Optional[str] = Depends(oauth2_scheme_optional),
+    db: Session = Depends(get_db),
+):
+    """토큰이 없거나 무효면 None. 링크 토큰과 사용자 인증을 함께 받는 경로에서 쓴다."""
+    if not token:
+        return None
+    payload = _decode_token(token)
+    if not payload:
+        return None
+    user_id = payload.get("sub")
+    if user_id is None:
+        return None
+    return db.query(models.User).filter(models.User.id == int(user_id)).first()
 
 async def get_current_active_admin(current_user: models.User = Depends(get_current_user)):
     if current_user.role != "admin":

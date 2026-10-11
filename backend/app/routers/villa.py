@@ -613,6 +613,27 @@ def _get_own_reservation_or_error(db: Session, reservation_id: int, current_user
     return reservation
 
 
+def _resolve_link_or_own(db: Session, reservation_id: int, link_token, current_user):
+    """
+    슬랙·메일 링크로 들어온 경우(link_token)와 로그인한 사용자 모두를 받는다.
+    링크 토큰이 이 예약의 유효한 토큰이면 로그인 없이 통과시키고(모바일 SSO 메일
+    인증 불편 해소), 토큰이 없거나 만료·무효면 사용자 인증으로 폴백한다.
+    """
+    if link_token:
+        rid = auth.verify_villa_link_token(link_token)
+        if rid == reservation_id:
+            reservation = db.query(models.VillaReservation).filter(
+                models.VillaReservation.id == reservation_id
+            ).first()
+            if not reservation:
+                raise HTTPException(status_code=404, detail="예약을 찾을 수 없습니다.")
+            return reservation
+        # 토큰이 만료·무효여도 로그인한 사용자면 아래에서 정상 처리한다.
+    if not current_user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    return _get_own_reservation_or_error(db, reservation_id, current_user)
+
+
 def _extra_info_payload(reservation):
     total = (reservation.adult_count or 0) + (reservation.child_count or 0)
     return {
@@ -640,10 +661,11 @@ def _extra_info_payload(reservation):
 @router.get("/{reservation_id}/extra")
 def get_extra_info(
     reservation_id: int,
-    current_user: models.User = Depends(auth.get_current_active_user),
+    t: str | None = None,
+    current_user: models.User = Depends(auth.get_optional_user),
     db: Session = Depends(get_db),
 ):
-    reservation = _get_own_reservation_or_error(db, reservation_id, current_user)
+    reservation = _resolve_link_or_own(db, reservation_id, t, current_user)
     return _extra_info_payload(reservation)
 
 
@@ -651,10 +673,11 @@ def get_extra_info(
 def update_extra_info(
     reservation_id: int,
     payload: schemas.VillaExtraInfoUpdate,
-    current_user: models.User = Depends(auth.get_current_active_user),
+    t: str | None = None,
+    current_user: models.User = Depends(auth.get_optional_user),
     db: Session = Depends(get_db),
 ):
-    reservation = _get_own_reservation_or_error(db, reservation_id, current_user)
+    reservation = _resolve_link_or_own(db, reservation_id, t, current_user)
     if reservation.status != "confirmed":
         raise HTTPException(
             status_code=400,
@@ -714,14 +737,15 @@ def _parking_mail_draft_for(db: Session, reservation) -> dict | None:
 def send_parking_mail(
     reservation_id: int,
     payload: schemas.VillaParkingMailSend,
-    current_user: models.User = Depends(auth.get_current_active_user),
+    t: str | None = None,
+    current_user: models.User = Depends(auth.get_optional_user),
     db: Session = Depends(get_db),
 ):
     """
     이용자가 확인·수정한 주차등록 요청 메일을 관리실로 보낸다.
     받는 주소는 관리자 설정값만 쓴다 — 클라이언트가 수신자를 정하게 하면 메일 릴레이가 된다.
     """
-    reservation = _get_own_reservation_or_error(db, reservation_id, current_user)
+    reservation = _resolve_link_or_own(db, reservation_id, t, current_user)
     if reservation.status != "confirmed":
         raise HTTPException(status_code=400, detail="확정된 예약만 주차등록을 요청할 수 있습니다.")
     if not reservation.facility or reservation.facility.name != villa_notify.PARKING_MAIL_VILLA:
@@ -755,10 +779,11 @@ def send_parking_mail(
 @router.get("/{reservation_id}/guide")
 def get_villa_guide(
     reservation_id: int,
-    current_user: models.User = Depends(auth.get_current_active_user),
+    t: str | None = None,
+    current_user: models.User = Depends(auth.get_optional_user),
     db: Session = Depends(get_db),
 ):
-    reservation = _get_own_reservation_or_error(db, reservation_id, current_user)
+    reservation = _resolve_link_or_own(db, reservation_id, t, current_user)
     villa_name = reservation.facility.name if reservation.facility else None
     content = villa_content.get_villa_content(villa_name)
     if not content:
@@ -787,10 +812,11 @@ def get_villa_guide(
 @router.get("/{reservation_id}/checkout")
 def get_villa_checkout(
     reservation_id: int,
-    current_user: models.User = Depends(auth.get_current_active_user),
+    t: str | None = None,
+    current_user: models.User = Depends(auth.get_optional_user),
     db: Session = Depends(get_db),
 ):
-    reservation = _get_own_reservation_or_error(db, reservation_id, current_user)
+    reservation = _resolve_link_or_own(db, reservation_id, t, current_user)
     villa_name = reservation.facility.name if reservation.facility else None
     content = villa_content.get_villa_content(villa_name)
     if not content:
@@ -818,10 +844,11 @@ def get_villa_checkout(
 def submit_villa_checkout(
     reservation_id: int,
     payload: schemas.VillaChecklistSubmit,
-    current_user: models.User = Depends(auth.get_current_active_user),
+    t: str | None = None,
+    current_user: models.User = Depends(auth.get_optional_user),
     db: Session = Depends(get_db),
 ):
-    reservation = _get_own_reservation_or_error(db, reservation_id, current_user)
+    reservation = _resolve_link_or_own(db, reservation_id, t, current_user)
     villa_name = reservation.facility.name if reservation.facility else None
     content = villa_content.get_villa_content(villa_name)
     if not content:

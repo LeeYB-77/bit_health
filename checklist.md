@@ -132,3 +132,15 @@
 - [x] 프런트: 관리자 홈에 카드 추가
 - [x] tsc + 로컬 브라우저 검증
 - [x] 전체 테스트 통과 후 커밋 (배포는 별도 요청 시)
+
+---
+
+## 별장 링크 매직 링크(무로그인 접근) (2026-10)
+
+- [x] auth: 링크 전용 서명 토큰 생성/검증 + 선택적 사용자 인증(get_optional_user)
+- [x] villa: guide/checkout/extra/parking-mail 엔드포인트가 링크 토큰 또는 사용자 인증 수용
+- [x] villa_notify: guide/checkout/extra URL에 서명 토큰 부착
+- [x] 프런트: checkout/guide/extra 페이지가 URL의 t로 로그인 없이 접근
+- [x] lib/api: 6개 별장 API에 t 파라미터 추가
+- [x] 백엔드 테스트: 링크 토큰 수용·범위 제한·만료/무효 폴백·사용자 인증 회귀
+- [x] tsc + 로컬 검증 후 커밋/배포

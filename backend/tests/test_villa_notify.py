@@ -67,8 +67,10 @@ def test_확정_통보에_추가입력_링크가_포함(db, facilities, make_use
 def test_링크는_절대주소(db, facilities, make_user, captured, monkeypatch):
     monkeypatch.setattr(villa_notify, "PUBLIC_BASE_URL", "https://book.bit.kr/")
     row = _confirmed(db, facilities, make_user(email="kim@bit.kr"))
-    # 끝의 슬래시가 중복되지 않아야 한다
-    assert villa_notify.extra_info_url(row.id) == f"https://book.bit.kr/villa/extra/{row.id}"
+    url = villa_notify.extra_info_url(row.id)
+    # 절대주소이면서 끝의 슬래시가 중복되지 않아야 한다. 뒤에 매직 링크 토큰(?t=)이 붙는다.
+    assert url.startswith(f"https://book.bit.kr/villa/extra/{row.id}?t=")
+    assert "book.bit.kr//" not in url
 
 
 def test_미선정_통보(db, facilities, make_user, captured):

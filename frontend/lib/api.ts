@@ -315,8 +315,11 @@ export interface VillaParkingMail {
   body: string;
 }
 
-export const getVillaExtraInfo = async (id: number): Promise<VillaExtraInfo> => {
-  return fetcher(`/api/villa/${id}/extra`);
+// 슬랙·메일 링크의 매직 토큰(?t=)을 쿼리로 붙인다. 로그인 없이 본인 예약에 접근한다.
+const linkQuery = (t?: string | null) => (t ? `?t=${encodeURIComponent(t)}` : '');
+
+export const getVillaExtraInfo = async (id: number, t?: string | null): Promise<VillaExtraInfo> => {
+  return fetcher(`/api/villa/${id}/extra${linkQuery(t)}`);
 };
 
 export const saveVillaExtraInfo = async (
@@ -327,9 +330,10 @@ export const saveVillaExtraInfo = async (
     adult_count: number;
     child_count: number;
     contact_phone: string;  // 필수 입력
-  }
+  },
+  t?: string | null
 ): Promise<VillaExtraInfo> => {
-  return fetcher(`/api/villa/${id}/extra`, {
+  return fetcher(`/api/villa/${id}/extra${linkQuery(t)}`, {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -338,9 +342,10 @@ export const saveVillaExtraInfo = async (
 // 이용자가 확인·수정한 주차등록 요청 메일을 관리실로 보낸다. 수신자는 서버 설정값을 쓴다.
 export const sendVillaParkingMail = async (
   id: number,
-  data: { subject: string; body: string }
+  data: { subject: string; body: string },
+  t?: string | null
 ): Promise<{ message: string }> => {
-  return fetcher(`/api/villa/${id}/parking-mail`, {
+  return fetcher(`/api/villa/${id}/parking-mail${linkQuery(t)}`, {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -375,8 +380,8 @@ export interface VillaGuide {
   emergency_contact: string;
 }
 
-export const getVillaGuide = async (id: number): Promise<VillaGuide> => {
-  return fetcher(`/api/villa/${id}/guide`);
+export const getVillaGuide = async (id: number, t?: string | null): Promise<VillaGuide> => {
+  return fetcher(`/api/villa/${id}/guide${linkQuery(t)}`);
 };
 
 // --- 퇴실 체크사항 (체크아웃 당일) ---
@@ -396,15 +401,16 @@ export interface VillaCheckout {
   notes: string | null;
 }
 
-export const getVillaCheckout = async (id: number): Promise<VillaCheckout> => {
-  return fetcher(`/api/villa/${id}/checkout`);
+export const getVillaCheckout = async (id: number, t?: string | null): Promise<VillaCheckout> => {
+  return fetcher(`/api/villa/${id}/checkout${linkQuery(t)}`);
 };
 
 export const submitVillaCheckout = async (
   id: number,
-  data: { checked: boolean[]; notes: string | null }
+  data: { checked: boolean[]; notes: string | null },
+  t?: string | null
 ): Promise<{ message: string }> => {
-  return fetcher(`/api/villa/${id}/checkout`, {
+  return fetcher(`/api/villa/${id}/checkout${linkQuery(t)}`, {
     method: 'POST',
     body: JSON.stringify(data),
   });

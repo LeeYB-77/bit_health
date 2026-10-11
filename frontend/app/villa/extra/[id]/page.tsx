@@ -2,7 +2,7 @@
 // 비트별장 확정 예약의 추가 입력사항(차량, 이용 구성) 페이지. 확정 메일·Slack 링크로 진입한다.
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { AlertTriangle, ArrowLeft, Car, CheckCircle, Loader2, Mail, Phone, Users, X } from 'lucide-react';
 import {
     getVillaExtraInfo, saveVillaExtraInfo, sendVillaParkingMail, VillaExtraInfo, VillaParkingMail,
@@ -14,6 +14,7 @@ export default function VillaExtraInfoPage() {
     const router = useRouter();
     const params = useParams<{ id: string }>();
     const reservationId = Number(params?.id);
+    const linkToken = useSearchParams().get('t');  // 슬랙·메일 매직 링크 토큰
 
     const [info, setInfo] = useState<VillaExtraInfo | null>(null);
     const [vehicleCount, setVehicleCount] = useState(0);
@@ -33,7 +34,7 @@ export default function VillaExtraInfoPage() {
 
     const load = useCallback(async () => {
         try {
-            const data = await getVillaExtraInfo(reservationId);
+            const data = await getVillaExtraInfo(reservationId, linkToken);
             setInfo(data);
             const count = data.vehicle_count ?? 0;
             setVehicleCount(count);
@@ -49,10 +50,11 @@ export default function VillaExtraInfoPage() {
         } finally {
             setLoading(false);
         }
-    }, [reservationId]);
+    }, [reservationId, linkToken]);
 
     useEffect(() => {
-        if (!localStorage.getItem('access_token')) {
+        // 매직 링크 토큰이 있으면 로그인 없이 접근한다.
+        if (!linkToken && !localStorage.getItem('access_token')) {
             router.replace(`/login?redirect=/villa/extra/${reservationId}`);
             return;
         }
@@ -62,7 +64,7 @@ export default function VillaExtraInfoPage() {
             return;
         }
         load();
-    }, [load, reservationId, router]);
+    }, [load, reservationId, router, linkToken]);
 
     const setCount = (next: number) => {
         const clamped = Math.max(0, Math.min(MAX_VEHICLES, next));
@@ -95,7 +97,7 @@ export default function VillaExtraInfoPage() {
                 adult_count: adultCount,
                 child_count: childCount,
                 contact_phone: contactPhone.trim(),
-            });
+            }, linkToken);
             setSaved({ warning: result.warning ?? null });
             setInfo(result);
             if (result.parking_mail) {
@@ -118,7 +120,7 @@ export default function VillaExtraInfoPage() {
             const res = await sendVillaParkingMail(info.id, {
                 subject: parkingMail.subject,
                 body: parkingMail.body,
-            });
+            }, linkToken);
             setParkingMail(null);
             setSaved(prev => ({ warning: prev?.warning ?? null, mailSent: res.message }));
             closeSoon(2000);
