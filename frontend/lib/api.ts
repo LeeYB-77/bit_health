@@ -23,6 +23,16 @@ export const fetcher = async (url: string, options: RequestInit = {}) => {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'An error occurred' }));
+    // 토큰이 만료·무효(예: 예전 세션)면 401이 온다. 슬랙·메일 링크를 인앱
+    // 브라우저로 열면 남아 있던 토큰으로 호출했다가 막히는데, 그대로 에러만
+    // 보여주면 재로그인할 방법이 없다. 무효 토큰을 지우고 로그인으로 보낸 뒤
+    // 원래 페이지로 돌아오게 한다.
+    if (response.status === 401 && typeof window !== 'undefined'
+        && !window.location.pathname.startsWith('/login')) {
+      try { localStorage.removeItem('access_token'); } catch {}
+      const here = window.location.pathname + window.location.search;
+      window.location.href = `/login?redirect=${encodeURIComponent(here)}`;
+    }
     throw new Error(error.detail || response.statusText);
   }
 
